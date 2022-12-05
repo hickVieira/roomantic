@@ -40,12 +40,15 @@ bl_info = {
 # FUNCS
 
 
-def update_sector_solidify(self, context):
-    brush = context.active_object
+def _update_sector_solidify(self, context):
+    update_sector_solidify(context.active_object)
+
+
+def update_sector_solidify(brush):
     if brush.modifiers:
         mod = brush.modifiers[0]
-        mod.thickness = brush.ceiling_height - brush.floor_height
-        mod.offset = 1 + brush.floor_height / (mod.thickness / 2)
+        mod.thickness = brush.ble_ceiling_height - brush.ble_floor_height
+        mod.offset = 1 + brush.ble_floor_height / (mod.thickness / 2)
 
 
 def initialize_brush(brush):
@@ -112,10 +115,9 @@ def update_sector(brush):
     solidify.use_even_offset = True
     solidify.use_quality_normals = True
     solidify.use_even_offset = True
-    solidify.thickness = brush.ceiling_height - brush.floor_height
-    solidify.offset = 1 + brush.floor_height / (solidify.thickness / 2)
     solidify.material_offset = 1
     solidify.material_offset_rim = 2
+    update_sector_solidify(brush)
 
     # add delete materials
     set_material_slots_size(brush, 3)
@@ -251,6 +253,116 @@ def flip_normals(brush):
     bpy.ops.mesh.flip_normals()
     bpy.ops.object.mode_set(mode='OBJECT')
 
+
+def translate(val, t):
+    return val + t
+
+
+def scale(val, s):
+    return val * s
+
+
+def rotate2D(uv, degrees):
+    radians = math.radians(degrees)
+    newUV = copy(uv)
+    newUV.x = uv.x*math.cos(radians) - uv.y*math.sin(radians)
+    newUV.y = uv.x*math.sin(radians) + uv.y*math.cos(radians)
+    return newUV
+
+
+def auto_texture(brush):
+    mesh = brush.data
+    objectLocation = brush.location
+    objectScale = brush.scale
+
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+
+    uv_layer = bm.loops.layers.uv.verify()
+    for f in bm.faces:
+        nX = f.normal.x
+        nY = f.normal.y
+        nZ = f.normal.z
+        if nX < 0:
+            nX = nX * -1
+        if nY < 0:
+            nY = nY * -1
+        if nZ < 0:
+            nZ = nZ * -1
+        faceNormalLargest = nX
+        faceDirection = "x"
+        if faceNormalLargest < nY:
+            faceNormalLargest = nY
+            faceDirection = "y"
+        if faceNormalLargest < nZ:
+            faceNormalLargest = nZ
+            faceDirection = "z"
+        if faceDirection == "x":
+            if f.normal.x < 0:
+                faceDirection = "-x"
+        if faceDirection == "y":
+            if f.normal.y < 0:
+                faceDirection = "-y"
+        if faceDirection == "z":
+            if f.normal.z < 0:
+                faceDirection = "-z"
+        for l in f.loops:
+            luv = l[uv_layer]
+            if faceDirection == "x":
+                luv.uv.x = ((l.vert.co.y * objectScale[1]) + objectLocation[1])
+                luv.uv.y = ((l.vert.co.z * objectScale[2]) + objectLocation[2])
+                luv.uv = rotate2D(luv.uv, brush.wall_texture_rotation)
+                luv.uv.x = translate(scale(
+                    luv.uv.x, brush.wall_texture_scale_offset[0]), brush.wall_texture_scale_offset[2])
+                luv.uv.y = translate(scale(
+                    luv.uv.y, brush.wall_texture_scale_offset[1]), brush.wall_texture_scale_offset[3])
+            if faceDirection == "-x":
+                luv.uv.x = ((l.vert.co.y * objectScale[1]) + objectLocation[1])
+                luv.uv.y = ((l.vert.co.z * objectScale[2]) + objectLocation[2])
+                luv.uv = rotate2D(luv.uv, brush.wall_texture_rotation)
+                luv.uv.x = translate(scale(
+                    luv.uv.x, brush.wall_texture_scale_offset[0]), brush.wall_texture_scale_offset[2])
+                luv.uv.y = translate(scale(
+                    luv.uv.y, brush.wall_texture_scale_offset[1]), brush.wall_texture_scale_offset[3])
+            if faceDirection == "y":
+                luv.uv.x = ((l.vert.co.x * objectScale[0]) + objectLocation[0])
+                luv.uv.y = ((l.vert.co.z * objectScale[2]) + objectLocation[2])
+                luv.uv = rotate2D(luv.uv, brush.wall_texture_rotation)
+                luv.uv.x = translate(scale(
+                    luv.uv.x, brush.wall_texture_scale_offset[0]), brush.wall_texture_scale_offset[2])
+                luv.uv.y = translate(scale(
+                    luv.uv.y, brush.wall_texture_scale_offset[1]), brush.wall_texture_scale_offset[3])
+            if faceDirection == "-y":
+                luv.uv.x = ((l.vert.co.x * objectScale[0]) + objectLocation[0])
+                luv.uv.y = ((l.vert.co.z * objectScale[2]) + objectLocation[2])
+                luv.uv = rotate2D(luv.uv, brush.wall_texture_rotation)
+                luv.uv.x = translate(scale(
+                    luv.uv.x, brush.wall_texture_scale_offset[0]), brush.wall_texture_scale_offset[2])
+                luv.uv.y = translate(scale(
+                    luv.uv.y, brush.wall_texture_scale_offset[1]), brush.wall_texture_scale_offset[3])
+            if faceDirection == "z":
+                luv.uv.x = ((l.vert.co.x * objectScale[0]) + objectLocation[0])
+                luv.uv.y = ((l.vert.co.y * objectScale[1]) + objectLocation[1])
+                luv.uv = rotate2D(luv.uv, brush.ceiling_texture_rotation)
+                luv.uv.x = translate(scale(
+                    luv.uv.x, brush.ceiling_texture_scale_offset[0]), brush.ceiling_texture_scale_offset[2])
+                luv.uv.y = translate(scale(
+                    luv.uv.y, brush.ceiling_texture_scale_offset[1]), brush.ceiling_texture_scale_offset[3])
+            if faceDirection == "-z":
+                luv.uv.x = ((l.vert.co.x * objectScale[0]) + objectLocation[0])
+                luv.uv.y = ((l.vert.co.y * objectScale[1]) + objectLocation[1])
+                luv.uv = rotate2D(luv.uv, brush.floor_texture_rotation)
+                luv.uv.x = translate(scale(
+                    luv.uv.x, brush.floor_texture_scale_offset[0]), brush.floor_texture_scale_offset[2])
+                luv.uv.y = translate(scale(
+                    luv.uv.y, brush.floor_texture_scale_offset[1]), brush.floor_texture_scale_offset[3])
+
+    bm.to_mesh(mesh)
+    bm.free()
+
+    brush.data = mesh
+
+
 # FUNCS
 
 
@@ -303,14 +415,14 @@ bpy.types.Object.ble_ceiling_height = bpy.props.FloatProperty(
     default=4,
     step=10,
     precision=3,
-    update=update_sector_solidify
+    update=_update_sector_solidify
 )
 bpy.types.Object.ble_floor_height = bpy.props.FloatProperty(
     name="Floor Height",
     default=0,
     step=10,
     precision=3,
-    update=update_sector_solidify
+    update=_update_sector_solidify
 )
 bpy.types.Object.ble_brush_auto_texture = bpy.props.BoolProperty(
     name="Brush Auto Texture",
@@ -483,10 +595,16 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
 
         # update brushes
         for brush in brushes:
+            # unlink from everything
             for col in brush.users_collection:
                 col.objects.unlink(brush)
-            brushCollection.objects.link(brush)
-            update_brush(brush)
+            
+            # if has no geom then remove
+            if len(brush.data.vertices) < 3:
+                brushes.remove(brush)
+            else:
+                brushCollection.objects.link(brush)
+                update_brush(brush)
 
         # cache brush boolean objects (they are just remove_material blobs)
         booleans = {}
@@ -514,6 +632,8 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
                 apply_brush_csg(currentRoom, otherBoolean,
                                 csg_operation_to_blender_boolean["SUBTRACT"])
             apply_remove_material(currentRoom)
+            if currentBrush.ble_brush_type == 'SECTOR' or (currentBrush.ble_brush_type == 'BRUSH' and currentBrush.ble_brush_auto_texture):
+                auto_texture(currentRoom)
             if bpy.context.scene.ble_flip_normals:
                 flip_normals(currentRoom)
 
@@ -526,15 +646,15 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
             bpy.ops.object.mode_set(mode='EDIT')
 
         # remove trash
-        # for obj in bpy.data.objects:
-        #     if obj.users == 0:
-        #         bpy.data.objects.remove(obj, do_unlink=True)
-        # for mesh in bpy.data.meshes:
-        #     if mesh.users == 0:
-        #         bpy.data.meshes.remove(mesh, do_unlink=True)
-        # for material in bpy.data.materials:
-        #     if material.users == 0:
-        #         bpy.data.materials.remove(material, do_unlink=True)
+        for obj in bpy.data.objects:
+            if obj.users == 0:
+                bpy.data.objects.remove(obj, do_unlink=True)
+        for mesh in bpy.data.meshes:
+            if mesh.users == 0:
+                bpy.data.meshes.remove(mesh, do_unlink=True)
+        for material in bpy.data.materials:
+            if material.users == 0:
+                bpy.data.materials.remove(material, do_unlink=True)
 
         return {"FINISHED"}
 
@@ -634,7 +754,6 @@ class BlenderLevelEditorRipGeometry(bpy.types.Operator):
         activeObj = context.active_object
 
         activeObjBM = bmesh.from_edit_mesh(activeObj.data)
-        ripedObjBM = bmesh.new()
 
         # https://blender.stackexchange.com/questions/179667/split-off-bmesh-selected-faces
         activeObjBM.verts.ensure_lookup_table()
@@ -642,39 +761,32 @@ class BlenderLevelEditorRipGeometry(bpy.types.Operator):
         activeObjBM.faces.ensure_lookup_table()
 
         selectedFaces = [x for x in activeObjBM.faces if x.select]
-        selectedEdges = [x for x in activeObjBM.edges if x.select]
 
-        pyVerts = []
-        pyEdges = []
-        pyFaces = []
-
-        # rip geometry
-        if len(selectedFaces) > 0:
-            for f in selectedFaces:
-                currentFaceIndices = []
-                for v in f.verts:
-                    if v not in pyVerts:
-                        pyVerts.append(v)
-                    currentFaceIndices.append(pyVerts.index(v))
-
-                pyFaces.append(currentFaceIndices)
-        elif len(selectedEdges) > 0:
-            for e in selectedEdges:
-                if e.verts[0] not in pyVerts:
-                    pyVerts.append(e.verts[0])
-                if e.verts[1] not in pyVerts:
-                    pyVerts.append(e.verts[1])
-
-                vIndex0 = pyVerts.index(e.verts[0])
-                vIndex1 = pyVerts.index(e.verts[1])
-
-                pyEdges.append([vIndex0, vIndex1])
-        else:
-            # early out
-            ripedObjBM.free()
+        # early out
+        if len(selectedFaces) == 0:
+            activeObjBM.free()
             return {"CANCELLED"}
 
-        # remove riped
+        ripedObjBM = bmesh.new()
+        pyVerts = []
+        pyFaces = []
+
+        # rip-copy faces
+        for f in selectedFaces:
+            currentFaceIndices = []
+            for v in f.verts:
+                if v not in pyVerts:
+                    pyVerts.append(v)
+                currentFaceIndices.append(pyVerts.index(v))
+
+            pyFaces.append(currentFaceIndices)
+
+        # create mesh
+        ripedMesh = bpy.data.meshes.new(name='riped_mesh')
+        if len(pyFaces) > 0:
+            ripedMesh.from_pydata([x.co for x in pyVerts], [], pyFaces)
+
+        # remove from riped
         if activeObj.brush_type != 'BRUSH' and len(selectedFaces) > 0:
             edgesToRemove = []
             for f in selectedFaces:
@@ -689,41 +801,39 @@ class BlenderLevelEditorRipGeometry(bpy.types.Operator):
                 if e.is_wire:
                     activeObjBM.edges.remove(e)
 
+            for v in activeObjBM.verts:
+                if len(v.link_edges) == 0 or len(v.link_faces) == 0:
+                    activeObjBM.verts.remove(v)
+
         activeObjBM.verts.ensure_lookup_table()
         activeObjBM.edges.ensure_lookup_table()
         activeObjBM.faces.ensure_lookup_table()
 
-        # create mesh
-        ripedMesh = bpy.data.meshes.new(name='riped_mesh')
-        if len(pyFaces) > 0:
-            ripedMesh.from_pydata([x.co for x in pyVerts], [], pyFaces)
-        else:
-            ripedMesh.from_pydata([x.co for x in pyVerts], pyEdges, [])
-
         # create object
         ripedObj = activeObj.copy()
-        for coll in activeObj.users_collection:
-            coll.objects.link(ripedObj)
+        for col in activeObj.users_collection:
+            col.objects.link(ripedObj)
         ripedObj.data = ripedMesh
         copy_materials(ripedObj, activeObj)
 
+        activeObjBM.free()
         ripedObjBM.free()
 
-        if self.focus_to_rip:
-            # deselect eveything
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.select_all(action='DESELECT')
+        # deselect eveything
+        bpy.ops.mesh.select_all(action='DESELECT')
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
 
+        if self.focus_to_rip:
             ripedObj.select_set(True)
             bpy.context.view_layer.objects.active = ripedObj
-
             bpy.ops.object.mode_set(mode='EDIT')
             bpy.ops.mesh.select_all(action='SELECT')
         else:
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.object.mode_set(mode='OBJECT')
+            activeObj.select_set(True)
+            bpy.context.view_layer.objects.active = activeObj
             bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='DESELECT')
 
         return {"FINISHED"}
 
