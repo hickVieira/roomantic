@@ -41,11 +41,11 @@ bl_info = {
 
 
 def update_sector_solidify(self, context):
-    ob = context.active_object
-    if ob.modifiers:
-        mod = ob.modifiers[0]
-        mod.thickness = ob.ceiling_height - ob.floor_height
-        mod.offset = 1 + ob.floor_height / (mod.thickness / 2)
+    brush = context.active_object
+    if brush.modifiers:
+        mod = brush.modifiers[0]
+        mod.thickness = brush.ceiling_height - brush.floor_height
+        mod.offset = 1 + brush.floor_height / (mod.thickness / 2)
 
 
 def initialize_brush(brush):
@@ -68,27 +68,46 @@ def initialize_brush(brush):
         brush.ble_floor_texture_rotation = 0
 
 
-def get_modifier(ob, type):
-    for mod in ob.modifiers:
+def _get_add_collection(name):
+    if name in bpy.data.collections:
+        return bpy.data.collections[name]
+    return bpy.data.collections.new(name=name)
+
+
+def get_add_collection(scene, name):
+    col = _get_add_collection(name)
+    if name not in scene.collection.children:
+        scene.collection.children.link(col)
+    return col
+
+
+def get_modifier(obj, type):
+    for mod in obj.modifiers:
         if mod.type == type:
             return mod
     return None
 
 
-def add_modifier(ob, type):
-    return ob.modifiers.new(name=type, type=type)
+def add_modifier(obj, type):
+    return obj.modifiers.new(name=type, type=type)
 
 
-def get_add_modifier(ob, type):
-    mod = get_modifier(ob, type)
+def get_add_modifier(obj, type):
+    mod = get_modifier(obj, type)
     if mod is None:
-        mod = add_modifier(ob, type)
+        mod = add_modifier(obj, type)
     return mod
 
 
+def set_material_slots_size(obj, size):
+    while len(obj.material_slots) < size:
+        obj.data.materials.append(None)
+    while len(obj.material_slots) > size:
+        obj.data.materials.pop()
+
+
 def update_sector(brush):
-    # update solidify
-    # get add solidify
+    # get add update solidify
     solidify = get_add_modifier(brush, 'SOLIDIFY')
     solidify.use_even_offset = True
     solidify.use_quality_normals = True
@@ -98,31 +117,27 @@ def update_sector(brush):
     solidify.material_offset = 1
     solidify.material_offset_rim = 2
 
-    # update materials
-    # delete all the way to 3
-    while len(brush.material_slots) < 3:
-        bpy.ops.object.material_slot_add()
-    # add all the way to 3
-    while len(brush.material_slots) > 3:
-        bpy.ops.object.material_slot_remove()
+    # add delete materials
+    set_material_slots_size(brush, 3)
 
-    if bpy.data.materials.find(brush.ceiling_texture) != -1:
-        brush.material_slots[0].material = bpy.data.materials[brush.ceiling_texture]
-    if bpy.data.materials.find(brush.floor_texture) != -1:
-        brush.material_slots[1].material = bpy.data.materials[brush.floor_texture]
-    if bpy.data.materials.find(brush.wall_texture) != -1:
-        brush.material_slots[2].material = bpy.data.materials[brush.wall_texture]
+    # update update
+    if bpy.data.materials.find(brush.ble_ceiling_texture) != -1:
+        brush.material_slots[0].material = bpy.data.materials[brush.ble_ceiling_texture]
+    if bpy.data.materials.find(brush.ble_floor_texture) != -1:
+        brush.material_slots[1].material = bpy.data.materials[brush.ble_floor_texture]
+    if bpy.data.materials.find(brush.ble_wall_texture) != -1:
+        brush.material_slots[2].material = bpy.data.materials[brush.ble_wall_texture]
 
 
 def update_brush_precision(brush):
-    brush.location.x = round(brush.location.x, bpy.context.scene.map_precision)
-    brush.location.y = round(brush.location.y, bpy.context.scene.map_precision)
-    brush.location.z = round(brush.location.z, bpy.context.scene.map_precision)
+    brush.location.x = round(brush.location.x, bpy.context.scene.ble_precision)
+    brush.location.y = round(brush.location.y, bpy.context.scene.ble_precision)
+    brush.location.z = round(brush.location.z, bpy.context.scene.ble_precision)
 
     for v in brush.data.vertices:
-        v.co.x = round(v.co.x, bpy.context.scene.map_precision)
-        v.co.y = round(v.co.y, bpy.context.scene.map_precision)
-        v.co.z = round(v.co.z, bpy.context.scene.map_precision)
+        v.co.x = round(v.co.x, bpy.context.scene.ble_precision)
+        v.co.y = round(v.co.y, bpy.context.scene.ble_precision)
+        v.co.z = round(v.co.z, bpy.context.scene.ble_precision)
 
 
 def update_brush(brush):
@@ -135,11 +150,111 @@ def update_brush(brush):
             update_sector(brush)
 
 
+def get_all_brushes():
+    # get everything
+    allObjects = bpy.context.scene.collection.all_objects
+
+    # get brushes only
+    brushes = []
+    for obj in allObjects:
+        if obj.ble_brush_type is not 'NONE':
+            brushes.append(obj)
+
+    return brushes
+
+
+def copy_materials(source, target):
+    set_material_slots_size(target, max(
+        len(target.data.materials), len(source.data.materials)))
+    for i in range(0, len(source.data.materials)):
+        target.data.materials[i] = source.data.materials[i]
+
+
+def copy_transforms(source, target):
+    target.location = source.location
+    target.scale = source.scale
+    target.rotation_euler = source.rotation_euler
+
+
+def eval_brush(brush):
+    dg = bpy.context.evaluated_depsgraph_get()
+    evalObj = brush.evaluated_get(dg)
+    mesh = bpy.data.meshes.new_from_object(evalObj)
+    mesh.use_auto_smooth = brush.data.use_auto_smooth
+    mesh.auto_smooth_angle = brush.data.auto_smooth_angle
+
+    roomName = "ble_" + brush.name
+    room = bpy.data.objects.new(roomName, mesh)
+    room.name = roomName
+
+    copy_transforms(brush, room)
+    update_brush_precision(room)
+
+    return room
+
+
+def make_brush_boolean(brush):
+    set_material_slots_size(brush, 1)
+    brush.data.materials[0] = bpy.data.materials[bpy.context.scene.ble_remove_material]
+
+
+def apply_brush_csg(target, brushBoolean, operation):
+    bpy.ops.object.select_all(action='DESELECT')
+    bpy.context.view_layer.objects.active = target
+    target.select_set(True)
+
+    mod0 = target.modifiers.new(name='bool0', type='BOOLEAN')
+    mod0.object = brushBoolean
+    mod0.operation = 'UNION'
+    mod0.solver = 'EXACT'
+
+    mod1 = target.modifiers.new(name='bool1', type='BOOLEAN')
+    mod1.object = brushBoolean
+    mod1.operation = 'DIFFERENCE'
+    mod1.solver = 'EXACT'
+
+    bpy.ops.object.modifier_apply(modifier='bool0')
+    bpy.ops.object.modifier_apply(modifier='bool1')
+
+
+def apply_remove_material(brush):
+    bpy.ops.object.select_all(action='DESELECT')
+    bpy.context.view_layer.objects.active = brush
+    brush.select_set(True)
+
+    if bpy.context.scene.ble_remove_material is not "":
+        i = 0
+        remove = False
+        for m in brush.material_slots:
+            if bpy.context.scene.ble_remove_material == m.name:
+                remove = True
+            else:
+                if not remove:
+                    i += 1
+
+        if remove:
+            brush.active_material_index = i
+            bpy.ops.object.editmode_toggle()
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.object.material_slot_select()
+            bpy.ops.mesh.delete(type='FACE')
+            bpy.ops.object.editmode_toggle()
+            bpy.ops.object.material_slot_remove()
+
+
+def flip_normals(brush):
+    bpy.ops.object.select_all(action='DESELECT')
+    bpy.context.view_layer.objects.active = brush
+    brush.select_set(True)
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.flip_normals()
+    bpy.ops.object.mode_set(mode='OBJECT')
+
 # FUNCS
 
 
 # DATA
-
 
 csg_operation_to_blender_boolean = {
     "ADD": "UNION",
@@ -271,16 +386,16 @@ class BlenderLevelEditorPanel(bpy.types.Panel):
     bl_category = 'Blender Level Editor'
 
     def draw(self, context):
-        ob = context.active_object
-        scn = bpy.context.scene
+        obj = context.active_object
+        scene = bpy.context.scene
         layout = self.layout
 
         # base
         col = layout.column(align=True)
         col.label(icon="WORLD", text="Map Settings")
-        col.prop(scn, "ble_flip_normals")
-        col.prop(scn, "ble_precision")
-        col.prop_search(scn, "ble_remove_material", bpy.data, "materials")
+        col.prop(scene, "ble_flip_normals")
+        col.prop(scene, "ble_precision")
+        col.prop_search(scene, "ble_remove_material", bpy.data, "materials")
         col = layout.column(align=True)
         col.operator("scene.ble_build", text="Build", icon="MOD_BUILD")
 
@@ -289,47 +404,50 @@ class BlenderLevelEditorPanel(bpy.types.Panel):
         col.label(icon="SNAP_PEEL_OBJECT", text="Tools")
         col.operator("scene.ble_open_material",
                      text="Open Material", icon="TEXTURE")
-        # if bpy.context.mode == 'EDIT_MESH':
-        #     col.operator("object.ble_rip_geometry", text="Rip", icon="UNLINKED").remove_geometry = True
-        # else:
-        col.operator("scene.ble_new_geometry", text="New Sector",
-                     icon="MESH_PLANE").brush_type = 'SECTOR'
-        col.operator("scene.ble_new_geometry", text="New Brush",
-                     icon="CUBE").brush_type = 'BRUSH'
+        if bpy.context.mode == 'EDIT_MESH':
+            col.operator("object.ble_rip_geometry", text="Rip To",
+                         icon="UNLINKED").focus_to_rip = True
+            col.operator("object.ble_rip_geometry", text="Rip Stay",
+                         icon="UNLINKED").focus_to_rip = False
+        else:
+            col.operator("scene.ble_new_geometry", text="New Sector",
+                         icon="MESH_PLANE").brush_type = 'SECTOR'
+            col.operator("scene.ble_new_geometry", text="New Brush",
+                         icon="CUBE").brush_type = 'BRUSH'
 
         # object
-        if ob is not None:
+        if obj is not None:
             col = layout.column(align=True)
             col.label(icon="MOD_ARRAY", text="Brush Properties")
-            col.prop(ob, "ble_brush_type", text="Brush Type")
-            col.prop(ob, "ble_csg_operation", text="CSG Op")
-            col.prop(ob, "ble_csg_order", text="CSG Order")
-            col.prop(ob, "ble_brush_auto_texture", text="Auto Texture")
-            if ob.ble_brush_auto_texture:
+            col.prop(obj, "ble_brush_type", text="Brush Type")
+            col.prop(obj, "ble_csg_operation", text="CSG Op")
+            col.prop(obj, "ble_csg_order", text="CSG Order")
+            col.prop(obj, "ble_brush_auto_texture", text="Auto Texture")
+            if obj.ble_brush_auto_texture:
                 col = layout.row(align=True)
-                col.prop(ob, "ble_ceiling_texture_scale_offset")
+                col.prop(obj, "ble_ceiling_texture_scale_offset")
                 col = layout.row(align=True)
-                col.prop(ob, "ble_wall_texture_scale_offset")
+                col.prop(obj, "ble_wall_texture_scale_offset")
                 col = layout.row(align=True)
-                col.prop(ob, "ble_floor_texture_scale_offset")
+                col.prop(obj, "ble_floor_texture_scale_offset")
                 col = layout.row(align=True)
-                col.prop(ob, "ble_ceiling_texture_rotation")
+                col.prop(obj, "ble_ceiling_texture_rotation")
                 col = layout.row(align=True)
-                col.prop(ob, "ble_wall_texture_rotation")
+                col.prop(obj, "ble_wall_texture_rotation")
                 col = layout.row(align=True)
-                col.prop(ob, "ble_floor_texture_rotation")
-            if ob.ble_brush_type == 'SECTOR':
+                col.prop(obj, "ble_floor_texture_rotation")
+            if obj.ble_brush_type == 'SECTOR':
                 col = layout.column(align=True)
                 col.label(icon="MOD_ARRAY", text="Sector Properties")
-                col.prop(ob, "ble_ceiling_height")
-                col.prop(ob, "ble_floor_height")
+                col.prop(obj, "ble_ceiling_height")
+                col.prop(obj, "ble_floor_height")
                 # layout.separator()
                 col = layout.column(align=True)
-                col.prop_search(ob, "ble_ceiling_texture", bpy.data,
+                col.prop_search(obj, "ble_ceiling_texture", bpy.data,
                                 "materials", icon="MATERIAL", text="Ceiling")
-                col.prop_search(ob, "ble_wall_texture", bpy.data,
+                col.prop_search(obj, "ble_wall_texture", bpy.data,
                                 "materials", icon="MATERIAL", text="Wall")
-                col.prop_search(ob, "ble_floor_texture", bpy.data,
+                col.prop_search(obj, "ble_floor_texture", bpy.data,
                                 "materials", icon="MATERIAL", text="Floor")
 
 
@@ -338,50 +456,85 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
     bl_label = "Build"
 
     def execute(self, context):
-        scn = bpy.context.scene
+        scene = bpy.context.scene
 
         # save context
-        was_edit_mode = False
-        old_active = bpy.context.active_object
-        old_selected = bpy.context.selected_objects.copy()
+        wasEditMode = False
         if bpy.context.mode == 'EDIT_MESH':
             bpy.ops.object.mode_set(mode='OBJECT')
-            was_edit_mode = True
+            wasEditMode = True
 
         # The new algo works to achieve this goal: each brush must be its own separate object
         # So we can no longer rely on a global level_geometry object that gets booleaned around by each brush
         # we now need to treat each brush separately
 
-        # get everything
-        all_objects = bpy.context.scene.collection.all_objects
+        # get output collection
+        levelCollection = get_add_collection(scene, 'LEVEL')
+        levelCollection.hide_select = False
+        brushCollection = get_add_collection(scene, 'BRUSHES')
+        brushCollection.hide_select = False
+
+        # clear output collection
+        for obj in levelCollection.all_objects:
+            levelCollection.objects.unlink(obj)
 
         # get brushes only
-        brushes = []
-        for obj in all_objects:
-            if obj.ble_brush_type is not 'NONE':
-                brushes.append(obj)
-        
+        brushes = get_all_brushes()
+
+        # update brushes
+        for brush in brushes:
+            for col in brush.users_collection:
+                col.objects.unlink(brush)
+            brushCollection.objects.link(brush)
+            update_brush(brush)
+
+        # cache brush boolean objects (they are just remove_material blobs)
+        booleans = {}
+        for brush in brushes:
+            brushBoolean = eval_brush(brush)
+            make_brush_boolean(brushBoolean)
+            booleans[brush] = brushBoolean
+
+        # create/duplicate brushes to output
+        for currentBrush in brushes:
+            currentRoom = eval_brush(currentBrush)
+            currentRoom.display_type = 'TEXTURED'
+            copy_materials(currentBrush, currentRoom)
+            removeMaterialIndex = len(currentRoom.data.materials)
+            set_material_slots_size(currentRoom, len(
+                currentRoom.data.materials) + 1)
+            currentRoom.data.materials[removeMaterialIndex] = bpy.data.materials[bpy.context.scene.ble_remove_material]
+            levelCollection.objects.link(currentRoom)
+            for otherBrush in brushes:
+                if currentBrush == otherBrush:
+                    continue
+                # if not in_bounds(currentBrush,otherBrush):
+                    # continue
+                otherBoolean = booleans[otherBrush]
+                apply_brush_csg(currentRoom, otherBoolean,
+                                csg_operation_to_blender_boolean["SUBTRACT"])
+            apply_remove_material(currentRoom)
+            if bpy.context.scene.ble_flip_normals:
+                flip_normals(currentRoom)
+
+        # mark unselectable
+        levelCollection.hide_select = True
+
         # restore context
         bpy.ops.object.select_all(action='DESELECT')
-        if old_active:
-            old_active.select_set(True)
-            bpy.context.view_layer.objects.active = old_active
-        if was_edit_mode:
+        if wasEditMode:
             bpy.ops.object.mode_set(mode='EDIT')
-        for obj in old_selected:
-            if obj:
-                obj.select_set(True)
 
         # remove trash
-        for o in bpy.data.objects:
-            if o.users == 0:
-                bpy.data.objects.remove(o)
-        for m in bpy.data.meshes:
-            if m.users == 0:
-                bpy.data.meshes.remove(m)
-        # for m in bpy.data.materials:
-        #     if m.users == 0:
-        #         bpy.data.materials.remove(m)
+        # for obj in bpy.data.objects:
+        #     if obj.users == 0:
+        #         bpy.data.objects.remove(obj, do_unlink=True)
+        # for mesh in bpy.data.meshes:
+        #     if mesh.users == 0:
+        #         bpy.data.meshes.remove(mesh, do_unlink=True)
+        # for material in bpy.data.materials:
+        #     if material.users == 0:
+        #         bpy.data.materials.remove(material, do_unlink=True)
 
         return {"FINISHED"}
 
@@ -393,7 +546,6 @@ class BlenderLevelEditorNewGeometry(bpy.types.Operator):
     brush_type: bpy.props.StringProperty(name="brush_type", default='NONE')
 
     def execute(self, context):
-        scn = bpy.context.scene
         bpy.ops.object.select_all(action='DESELECT')
 
         if self.brush_type == 'SECTOR':
@@ -434,39 +586,144 @@ class BlenderLevelEditorOpenMaterial(bpy.types.Operator, ImportHelper):
             fileName, fileExtension = os.path.splitext(f.name)
 
             # new material or find it
-            new_material_name = fileName
-            new_material = bpy.data.materials.get(new_material_name)
+            newMaterialName = fileName
+            newMaterial = bpy.data.materials.get(newMaterialName)
 
-            if new_material == None:
-                new_material = bpy.data.materials.new(new_material_name)
+            if newMaterial == None:
+                newMaterial = bpy.data.materials.new(newMaterialName)
 
-            new_material.use_nodes = True
-            new_material.preview_render_type = 'FLAT'
+            newMaterial.use_nodes = True
+            newMaterial.preview_render_type = 'FLAT'
 
             # We clear it as we'll define it completely
-            new_material.node_tree.links.clear()
-            new_material.node_tree.nodes.clear()
+            newMaterial.node_tree.links.clear()
+            newMaterial.node_tree.nodes.clear()
 
             # create nodes
-            bsdfNode = new_material.node_tree.nodes.new(
+            bsdfNode = newMaterial.node_tree.nodes.new(
                 'ShaderNodeBsdfPrincipled')
-            outputNode = new_material.node_tree.nodes.new(
+            outputNode = newMaterial.node_tree.nodes.new(
                 'ShaderNodeOutputMaterial')
-            texImageNode = new_material.node_tree.nodes.new(
+            texImageNode = newMaterial.node_tree.nodes.new(
                 'ShaderNodeTexImage')
             texImageNode.name = fileName
             texImageNode.image = bpy.data.images.load(
                 directory + "\\" + fileName + fileExtension, check_existing=True)
 
             # create node links
-            new_material.node_tree.links.new(
+            newMaterial.node_tree.links.new(
                 bsdfNode.outputs['BSDF'], outputNode.inputs['Surface'])
-            new_material.node_tree.links.new(
+            newMaterial.node_tree.links.new(
                 bsdfNode.inputs['Base Color'], texImageNode.outputs['Color'])
 
             # some params
             bsdfNode.inputs['Roughness'].default_value = 0
             bsdfNode.inputs['Specular'].default_value = 0
+
+        return {"FINISHED"}
+
+
+class BlenderLevelEditorRipGeometry(bpy.types.Operator):
+    bl_idname = "object.ble_rip_geometry"
+    bl_label = "Rip Geometry"
+
+    focus_to_rip: bpy.props.BoolProperty(
+        name="active_to_riped", default=False)
+
+    def execute(self, context):
+        activeObj = context.active_object
+
+        activeObjBM = bmesh.from_edit_mesh(activeObj.data)
+        ripedObjBM = bmesh.new()
+
+        # https://blender.stackexchange.com/questions/179667/split-off-bmesh-selected-faces
+        activeObjBM.verts.ensure_lookup_table()
+        activeObjBM.edges.ensure_lookup_table()
+        activeObjBM.faces.ensure_lookup_table()
+
+        selectedFaces = [x for x in activeObjBM.faces if x.select]
+        selectedEdges = [x for x in activeObjBM.edges if x.select]
+
+        pyVerts = []
+        pyEdges = []
+        pyFaces = []
+
+        # rip geometry
+        if len(selectedFaces) > 0:
+            for f in selectedFaces:
+                currentFaceIndices = []
+                for v in f.verts:
+                    if v not in pyVerts:
+                        pyVerts.append(v)
+                    currentFaceIndices.append(pyVerts.index(v))
+
+                pyFaces.append(currentFaceIndices)
+        elif len(selectedEdges) > 0:
+            for e in selectedEdges:
+                if e.verts[0] not in pyVerts:
+                    pyVerts.append(e.verts[0])
+                if e.verts[1] not in pyVerts:
+                    pyVerts.append(e.verts[1])
+
+                vIndex0 = pyVerts.index(e.verts[0])
+                vIndex1 = pyVerts.index(e.verts[1])
+
+                pyEdges.append([vIndex0, vIndex1])
+        else:
+            # early out
+            ripedObjBM.free()
+            return {"CANCELLED"}
+
+        # remove riped
+        if activeObj.brush_type != 'BRUSH' and len(selectedFaces) > 0:
+            edgesToRemove = []
+            for f in selectedFaces:
+                for e in f.edges:
+                    if e not in edgesToRemove:
+                        edgesToRemove.append(e)
+
+            for f in selectedFaces:
+                activeObjBM.faces.remove(f)
+
+            for e in edgesToRemove:
+                if e.is_wire:
+                    activeObjBM.edges.remove(e)
+
+        activeObjBM.verts.ensure_lookup_table()
+        activeObjBM.edges.ensure_lookup_table()
+        activeObjBM.faces.ensure_lookup_table()
+
+        # create mesh
+        ripedMesh = bpy.data.meshes.new(name='riped_mesh')
+        if len(pyFaces) > 0:
+            ripedMesh.from_pydata([x.co for x in pyVerts], [], pyFaces)
+        else:
+            ripedMesh.from_pydata([x.co for x in pyVerts], pyEdges, [])
+
+        # create object
+        ripedObj = activeObj.copy()
+        for coll in activeObj.users_collection:
+            coll.objects.link(ripedObj)
+        ripedObj.data = ripedMesh
+        copy_materials(ripedObj, activeObj)
+
+        ripedObjBM.free()
+
+        if self.focus_to_rip:
+            # deselect eveything
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_all(action='DESELECT')
+
+            ripedObj.select_set(True)
+            bpy.context.view_layer.objects.active = ripedObj
+
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
+        else:
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.mode_set(mode='EDIT')
 
         return {"FINISHED"}
 
@@ -479,6 +736,7 @@ def register():
     bpy.utils.register_class(BlenderLevelEditorBuild)
     bpy.utils.register_class(BlenderLevelEditorNewGeometry)
     bpy.utils.register_class(BlenderLevelEditorOpenMaterial)
+    bpy.utils.register_class(BlenderLevelEditorRipGeometry)
 
 
 def unregister():
@@ -486,6 +744,7 @@ def unregister():
     bpy.utils.unregister_class(BlenderLevelEditorBuild)
     bpy.utils.unregister_class(BlenderLevelEditorNewGeometry)
     bpy.utils.unregister_class(BlenderLevelEditorOpenMaterial)
+    bpy.utils.unregister_class(BlenderLevelEditorRipGeometry)
 
 
 if __name__ == "__main__":
