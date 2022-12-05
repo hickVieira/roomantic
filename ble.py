@@ -30,7 +30,7 @@ bl_info = {
     "version": (0, 1),
     "blender": (3, 3, 0),
     "location": "View3D > Tools > BLE",
-    "description": "Toolbox for sector/brush based game level creation",
+    "description": "Toolbox for sector based game level creation",
     "warning": "WIP",
     "wiki_url": "",
     "category": "Object",
@@ -41,34 +41,36 @@ bl_info = {
 
 
 def _update_sector_solidify(self, context):
-    update_sector_solidify(context.active_object)
+    update_sector2d_solidify(context.active_object)
 
 
-def update_sector_solidify(brush):
-    if brush.modifiers:
-        mod = brush.modifiers[0]
-        mod.thickness = brush.ble_ceiling_height - brush.ble_floor_height
-        mod.offset = 1 + brush.ble_floor_height / (mod.thickness / 2)
+def update_sector2d_solidify(shape):
+    if shape.modifiers:
+        mod = shape.modifiers[0]
+        mod.thickness = shape.ble_ceiling_height - shape.ble_floor_height
+        mod.offset = 1 + shape.ble_floor_height / (mod.thickness / 2)
 
 
-def initialize_brush(brush):
-    if brush.ble_brush_type is not 'NONE':
-        brush.display_type = 'WIRE'
+def is_shape(obj):
+    return obj.ble_shape_type is not 'NONE'
 
-        brush.ble_csg_operation = 'ADD'
-        brush.ble_csg_order = 0
-        brush.ble_ceiling_height = 3
-        brush.ble_floor_height = 0
-        brush.ble_brush_auto_texture = True
-        brush.ble_floor_texture = ''
-        brush.ble_wall_texture = ''
-        brush.ble_ceiling_texture = ''
-        brush.ble_ceiling_texture_scale_offset = (1.0, 1.0, 0.0, 0.0)
-        brush.ble_wall_texture_scale_offset = (1.0, 1.0, 0.0, 0.0)
-        brush.ble_floor_texture_scale_offset = (1.0, 1.0, 0.0, 0.0)
-        brush.ble_ceiling_texture_rotation = 0
-        brush.ble_wall_texture_rotation = 0
-        brush.ble_floor_texture_rotation = 0
+
+def initialize_shape(shape):
+    if is_shape(shape):
+        shape.display_type = 'WIRE'
+
+        shape.ble_ceiling_height = 4
+        shape.ble_floor_height = 0
+        shape.ble_shape_auto_texture = True
+        shape.ble_floor_texture = ''
+        shape.ble_wall_texture = ''
+        shape.ble_ceiling_texture = ''
+        shape.ble_ceiling_texture_scale_offset = (1.0, 1.0, 0.0, 0.0)
+        shape.ble_wall_texture_scale_offset = (1.0, 1.0, 0.0, 0.0)
+        shape.ble_floor_texture_scale_offset = (1.0, 1.0, 0.0, 0.0)
+        shape.ble_ceiling_texture_rotation = 0
+        shape.ble_wall_texture_rotation = 0
+        shape.ble_floor_texture_rotation = 0
 
 
 def _get_add_collection(name):
@@ -109,60 +111,70 @@ def set_material_slots_size(obj, size):
         obj.data.materials.pop()
 
 
-def update_sector(brush):
+def remove_not_used():
+    for obj in bpy.data.objects:
+        if obj.users == 0:
+            bpy.data.objects.remove(obj, do_unlink=True)
+    for mesh in bpy.data.meshes:
+        if mesh.users == 0:
+            bpy.data.meshes.remove(mesh, do_unlink=True)
+    for material in bpy.data.materials:
+        if material.users == 0:
+            bpy.data.materials.remove(material, do_unlink=True)
+
+
+def update_sector2d(shape):
     # get add update solidify
-    solidify = get_add_modifier(brush, 'SOLIDIFY')
+    solidify = get_add_modifier(shape, 'SOLIDIFY')
     solidify.use_even_offset = True
     solidify.use_quality_normals = True
     solidify.use_even_offset = True
     solidify.material_offset = 1
     solidify.material_offset_rim = 2
-    update_sector_solidify(brush)
+    update_sector2d_solidify(shape)
 
     # add delete materials
-    set_material_slots_size(brush, 3)
+    set_material_slots_size(shape, 3)
 
     # update update
-    if bpy.data.materials.find(brush.ble_ceiling_texture) != -1:
-        brush.material_slots[0].material = bpy.data.materials[brush.ble_ceiling_texture]
-    if bpy.data.materials.find(brush.ble_floor_texture) != -1:
-        brush.material_slots[1].material = bpy.data.materials[brush.ble_floor_texture]
-    if bpy.data.materials.find(brush.ble_wall_texture) != -1:
-        brush.material_slots[2].material = bpy.data.materials[brush.ble_wall_texture]
+    if bpy.data.materials.find(shape.ble_ceiling_texture) != -1:
+        shape.material_slots[0].material = bpy.data.materials[shape.ble_ceiling_texture]
+    if bpy.data.materials.find(shape.ble_floor_texture) != -1:
+        shape.material_slots[1].material = bpy.data.materials[shape.ble_floor_texture]
+    if bpy.data.materials.find(shape.ble_wall_texture) != -1:
+        shape.material_slots[2].material = bpy.data.materials[shape.ble_wall_texture]
 
 
-def update_brush_precision(brush):
-    brush.location.x = round(brush.location.x, bpy.context.scene.ble_precision)
-    brush.location.y = round(brush.location.y, bpy.context.scene.ble_precision)
-    brush.location.z = round(brush.location.z, bpy.context.scene.ble_precision)
+def update_shape_precision(shape):
+    shape.location.x = round(shape.location.x, bpy.context.scene.ble_precision)
+    shape.location.y = round(shape.location.y, bpy.context.scene.ble_precision)
+    shape.location.z = round(shape.location.z, bpy.context.scene.ble_precision)
 
-    for v in brush.data.vertices:
+    for v in shape.data.vertices:
         v.co.x = round(v.co.x, bpy.context.scene.ble_precision)
         v.co.y = round(v.co.y, bpy.context.scene.ble_precision)
         v.co.z = round(v.co.z, bpy.context.scene.ble_precision)
 
 
-def update_brush(brush):
-    if brush:
-        brush.display_type = 'WIRE'
+def update_shape(shape):
+    if shape:
+        shape.display_type = 'WIRE'
 
-        update_brush_precision(brush)
+        update_shape_precision(shape)
 
-        if brush.ble_brush_type == 'SECTOR':
-            update_sector(brush)
+        if shape.ble_shape_type == 'SECTOR2D':
+            update_sector2d(shape)
 
 
-def get_all_brushes():
-    # get everything
-    allObjects = bpy.context.scene.collection.all_objects
-
-    # get brushes only
-    brushes = []
-    for obj in allObjects:
-        if obj.ble_brush_type is not 'NONE':
-            brushes.append(obj)
-
-    return brushes
+def get_shapees(collections):
+    shapees = []
+    for col in collections:
+        for obj in col.all_objects:
+            if obj.ble_shape_type is not None:
+                if obj.ble_shape_type is not 'NONE':
+                    if obj not in shapees:
+                        shapees.append(obj)
+    return shapees
 
 
 def copy_materials(source, target):
@@ -178,56 +190,56 @@ def copy_transforms(source, target):
     target.rotation_euler = source.rotation_euler
 
 
-def eval_brush(brush):
+def eval_shape(shape):
     dg = bpy.context.evaluated_depsgraph_get()
-    evalObj = brush.evaluated_get(dg)
+    evalObj = shape.evaluated_get(dg)
     mesh = bpy.data.meshes.new_from_object(evalObj)
-    mesh.use_auto_smooth = brush.data.use_auto_smooth
-    mesh.auto_smooth_angle = brush.data.auto_smooth_angle
+    mesh.use_auto_smooth = shape.data.use_auto_smooth
+    mesh.auto_smooth_angle = shape.data.auto_smooth_angle
 
-    roomName = "ble_" + brush.name
+    roomName = "ble_" + shape.name
     room = bpy.data.objects.new(roomName, mesh)
     room.name = roomName
 
-    copy_transforms(brush, room)
-    update_brush_precision(room)
+    copy_transforms(shape, room)
+    update_shape_precision(room)
 
     return room
 
 
-def make_brush_boolean(brush):
-    set_material_slots_size(brush, 1)
-    brush.data.materials[0] = bpy.data.materials[bpy.context.scene.ble_remove_material]
+def make_shape_boolean(shape):
+    set_material_slots_size(shape, 1)
+    shape.data.materials[0] = bpy.data.materials[bpy.context.scene.ble_remove_material]
 
 
-def apply_brush_csg(target, brushBoolean, operation):
+def apply_shape_csg(target, shapeBoolean, operation):
     bpy.ops.object.select_all(action='DESELECT')
     bpy.context.view_layer.objects.active = target
     target.select_set(True)
 
     mod0 = target.modifiers.new(name='bool0', type='BOOLEAN')
-    mod0.object = brushBoolean
-    mod0.operation = 'UNION'
+    mod0.object = shapeBoolean
     mod0.solver = 'EXACT'
+    mod0.operation = 'UNION'
 
     mod1 = target.modifiers.new(name='bool1', type='BOOLEAN')
-    mod1.object = brushBoolean
-    mod1.operation = 'DIFFERENCE'
+    mod1.object = shapeBoolean
     mod1.solver = 'EXACT'
+    mod1.operation = 'DIFFERENCE'
 
     bpy.ops.object.modifier_apply(modifier='bool0')
     bpy.ops.object.modifier_apply(modifier='bool1')
 
 
-def apply_remove_material(brush):
+def apply_remove_material(shape):
     bpy.ops.object.select_all(action='DESELECT')
-    bpy.context.view_layer.objects.active = brush
-    brush.select_set(True)
+    bpy.context.view_layer.objects.active = shape
+    shape.select_set(True)
 
     if bpy.context.scene.ble_remove_material is not "":
         i = 0
         remove = False
-        for m in brush.material_slots:
+        for m in shape.material_slots:
             if bpy.context.scene.ble_remove_material == m.name:
                 remove = True
             else:
@@ -235,7 +247,7 @@ def apply_remove_material(brush):
                     i += 1
 
         if remove:
-            brush.active_material_index = i
+            shape.active_material_index = i
             bpy.ops.object.editmode_toggle()
             bpy.ops.mesh.select_all(action='DESELECT')
             bpy.ops.object.material_slot_select()
@@ -244,10 +256,10 @@ def apply_remove_material(brush):
             bpy.ops.object.material_slot_remove()
 
 
-def flip_normals(brush):
+def flip_normals(shape):
     bpy.ops.object.select_all(action='DESELECT')
-    bpy.context.view_layer.objects.active = brush
-    brush.select_set(True)
+    bpy.context.view_layer.objects.active = shape
+    shape.select_set(True)
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.mesh.flip_normals()
@@ -270,10 +282,10 @@ def rotate2D(uv, degrees):
     return newUV
 
 
-def auto_texture(brush):
-    mesh = brush.data
-    objectLocation = brush.location
-    objectScale = brush.scale
+def auto_texture(shape):
+    mesh = shape.data
+    objectLocation = shape.location
+    objectScale = shape.scale
 
     bm = bmesh.new()
     bm.from_mesh(mesh)
@@ -311,56 +323,56 @@ def auto_texture(brush):
             if faceDirection == "x":
                 luv.uv.x = ((l.vert.co.y * objectScale[1]) + objectLocation[1])
                 luv.uv.y = ((l.vert.co.z * objectScale[2]) + objectLocation[2])
-                luv.uv = rotate2D(luv.uv, brush.wall_texture_rotation)
+                luv.uv = rotate2D(luv.uv, shape.ble_wall_texture_rotation)
                 luv.uv.x = translate(scale(
-                    luv.uv.x, brush.wall_texture_scale_offset[0]), brush.wall_texture_scale_offset[2])
+                    luv.uv.x, shape.ble_wall_texture_scale_offset[0]), shape.ble_wall_texture_scale_offset[2])
                 luv.uv.y = translate(scale(
-                    luv.uv.y, brush.wall_texture_scale_offset[1]), brush.wall_texture_scale_offset[3])
+                    luv.uv.y, shape.ble_wall_texture_scale_offset[1]), shape.ble_wall_texture_scale_offset[3])
             if faceDirection == "-x":
                 luv.uv.x = ((l.vert.co.y * objectScale[1]) + objectLocation[1])
                 luv.uv.y = ((l.vert.co.z * objectScale[2]) + objectLocation[2])
-                luv.uv = rotate2D(luv.uv, brush.wall_texture_rotation)
+                luv.uv = rotate2D(luv.uv, shape.ble_wall_texture_rotation)
                 luv.uv.x = translate(scale(
-                    luv.uv.x, brush.wall_texture_scale_offset[0]), brush.wall_texture_scale_offset[2])
+                    luv.uv.x, shape.ble_wall_texture_scale_offset[0]), shape.ble_wall_texture_scale_offset[2])
                 luv.uv.y = translate(scale(
-                    luv.uv.y, brush.wall_texture_scale_offset[1]), brush.wall_texture_scale_offset[3])
+                    luv.uv.y, shape.ble_wall_texture_scale_offset[1]), shape.ble_wall_texture_scale_offset[3])
             if faceDirection == "y":
                 luv.uv.x = ((l.vert.co.x * objectScale[0]) + objectLocation[0])
                 luv.uv.y = ((l.vert.co.z * objectScale[2]) + objectLocation[2])
-                luv.uv = rotate2D(luv.uv, brush.wall_texture_rotation)
+                luv.uv = rotate2D(luv.uv, shape.ble_wall_texture_rotation)
                 luv.uv.x = translate(scale(
-                    luv.uv.x, brush.wall_texture_scale_offset[0]), brush.wall_texture_scale_offset[2])
+                    luv.uv.x, shape.ble_wall_texture_scale_offset[0]), shape.ble_wall_texture_scale_offset[2])
                 luv.uv.y = translate(scale(
-                    luv.uv.y, brush.wall_texture_scale_offset[1]), brush.wall_texture_scale_offset[3])
+                    luv.uv.y, shape.ble_wall_texture_scale_offset[1]), shape.ble_wall_texture_scale_offset[3])
             if faceDirection == "-y":
                 luv.uv.x = ((l.vert.co.x * objectScale[0]) + objectLocation[0])
                 luv.uv.y = ((l.vert.co.z * objectScale[2]) + objectLocation[2])
-                luv.uv = rotate2D(luv.uv, brush.wall_texture_rotation)
+                luv.uv = rotate2D(luv.uv, shape.ble_wall_texture_rotation)
                 luv.uv.x = translate(scale(
-                    luv.uv.x, brush.wall_texture_scale_offset[0]), brush.wall_texture_scale_offset[2])
+                    luv.uv.x, shape.ble_wall_texture_scale_offset[0]), shape.ble_wall_texture_scale_offset[2])
                 luv.uv.y = translate(scale(
-                    luv.uv.y, brush.wall_texture_scale_offset[1]), brush.wall_texture_scale_offset[3])
+                    luv.uv.y, shape.ble_wall_texture_scale_offset[1]), shape.ble_wall_texture_scale_offset[3])
             if faceDirection == "z":
                 luv.uv.x = ((l.vert.co.x * objectScale[0]) + objectLocation[0])
                 luv.uv.y = ((l.vert.co.y * objectScale[1]) + objectLocation[1])
-                luv.uv = rotate2D(luv.uv, brush.ceiling_texture_rotation)
+                luv.uv = rotate2D(luv.uv, shape.ble_ceiling_texture_rotation)
                 luv.uv.x = translate(scale(
-                    luv.uv.x, brush.ceiling_texture_scale_offset[0]), brush.ceiling_texture_scale_offset[2])
+                    luv.uv.x, shape.ble_ceiling_texture_scale_offset[0]), shape.ble_ceiling_texture_scale_offset[2])
                 luv.uv.y = translate(scale(
-                    luv.uv.y, brush.ceiling_texture_scale_offset[1]), brush.ceiling_texture_scale_offset[3])
+                    luv.uv.y, shape.ble_ceiling_texture_scale_offset[1]), shape.ble_ceiling_texture_scale_offset[3])
             if faceDirection == "-z":
                 luv.uv.x = ((l.vert.co.x * objectScale[0]) + objectLocation[0])
                 luv.uv.y = ((l.vert.co.y * objectScale[1]) + objectLocation[1])
-                luv.uv = rotate2D(luv.uv, brush.floor_texture_rotation)
+                luv.uv = rotate2D(luv.uv, shape.ble_floor_texture_rotation)
                 luv.uv.x = translate(scale(
-                    luv.uv.x, brush.floor_texture_scale_offset[0]), brush.floor_texture_scale_offset[2])
+                    luv.uv.x, shape.ble_floor_texture_scale_offset[0]), shape.ble_floor_texture_scale_offset[2])
                 luv.uv.y = translate(scale(
-                    luv.uv.y, brush.floor_texture_scale_offset[1]), brush.floor_texture_scale_offset[3])
+                    luv.uv.y, shape.ble_floor_texture_scale_offset[1]), shape.ble_floor_texture_scale_offset[3])
 
     bm.to_mesh(mesh)
     bm.free()
 
-    brush.data = mesh
+    shape.data = mesh
 
 
 # FUNCS
@@ -368,10 +380,6 @@ def auto_texture(brush):
 
 # DATA
 
-csg_operation_to_blender_boolean = {
-    "ADD": "UNION",
-    "SUBTRACT": "DIFFERENCE"
-}
 bpy.types.Scene.ble_precision = bpy.props.IntProperty(
     name="Precision",
     default=3,
@@ -388,27 +396,15 @@ bpy.types.Scene.ble_remove_material = bpy.props.StringProperty(
     name="Remove Material",
     description="Material used as flag for removing geometry"
 )
-bpy.types.Object.ble_brush_type = bpy.props.EnumProperty(
+bpy.types.Object.ble_shape_type = bpy.props.EnumProperty(
     items=[
-        ("BRUSH", "Brush", "is a brush"),
-        ("SECTOR", "Sector", "is a sector"),
+        ("SECTOR2D", "Sector2D", "is a 2D sector"),
+        ("SECTOR3D", "Sector3D", "is a 3D sector"),
+        ("BRUSH", "Brush", "is a shape"),
         ("NONE", "None", "none"),
     ],
-    name="Brush Type",
+    name="Shape Type",
     default='NONE'
-)
-bpy.types.Object.ble_csg_operation = bpy.props.EnumProperty(
-    items=[
-        ("ADD", "Add", "add/union geometry to output"),
-        ("SUBTRACT", "Subtract", "subtract/remove geometry from output"),
-    ],
-    name="CSG Operation",
-    default='ADD'
-)
-bpy.types.Object.ble_csg_order = bpy.props.IntProperty(
-    name="CSG Order",
-    default=0,
-    description='Controls the order of CSG operation of the object'
 )
 bpy.types.Object.ble_ceiling_height = bpy.props.FloatProperty(
     name="Ceiling Height",
@@ -424,8 +420,8 @@ bpy.types.Object.ble_floor_height = bpy.props.FloatProperty(
     precision=3,
     update=_update_sector_solidify
 )
-bpy.types.Object.ble_brush_auto_texture = bpy.props.BoolProperty(
-    name="Brush Auto Texture",
+bpy.types.Object.ble_shape_auto_texture = bpy.props.BoolProperty(
+    name="Shape Auto Texture",
     default=True,
     description='Auto Texture on or off'
 )
@@ -522,20 +518,20 @@ class BlenderLevelEditorPanel(bpy.types.Panel):
             col.operator("object.ble_rip_geometry", text="Rip Stay",
                          icon="UNLINKED").focus_to_rip = False
         else:
-            col.operator("scene.ble_new_geometry", text="New Sector",
-                         icon="MESH_PLANE").brush_type = 'SECTOR'
+            col.operator("scene.ble_new_geometry", text="New Sector2D",
+                         icon="MESH_PLANE").shape_type = 'SECTOR2D'
+            col.operator("scene.ble_new_geometry", text="New Sector3D",
+                         icon="CUBE").shape_type = 'SECTOR3D'
             col.operator("scene.ble_new_geometry", text="New Brush",
-                         icon="CUBE").brush_type = 'BRUSH'
+                         icon="CUBE").shape_type = 'BRUSH'
 
         # object
         if obj is not None:
             col = layout.column(align=True)
-            col.label(icon="MOD_ARRAY", text="Brush Properties")
-            col.prop(obj, "ble_brush_type", text="Brush Type")
-            col.prop(obj, "ble_csg_operation", text="CSG Op")
-            col.prop(obj, "ble_csg_order", text="CSG Order")
-            col.prop(obj, "ble_brush_auto_texture", text="Auto Texture")
-            if obj.ble_brush_auto_texture:
+            col.label(icon="MOD_ARRAY", text="Shape Properties")
+            col.prop(obj, "ble_shape_type", text="Shape Type")
+            col.prop(obj, "ble_shape_auto_texture", text="Auto Texture")
+            if obj.ble_shape_auto_texture:
                 col = layout.row(align=True)
                 col.prop(obj, "ble_ceiling_texture_scale_offset")
                 col = layout.row(align=True)
@@ -548,7 +544,7 @@ class BlenderLevelEditorPanel(bpy.types.Panel):
                 col.prop(obj, "ble_wall_texture_rotation")
                 col = layout.row(align=True)
                 col.prop(obj, "ble_floor_texture_rotation")
-            if obj.ble_brush_type == 'SECTOR':
+            if obj.ble_shape_type == 'SECTOR2D':
                 col = layout.column(align=True)
                 col.label(icon="MOD_ARRAY", text="Sector Properties")
                 col.prop(obj, "ble_ceiling_height")
@@ -576,63 +572,69 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
             bpy.ops.object.mode_set(mode='OBJECT')
             wasEditMode = True
 
-        # The new algo works to achieve this goal: each brush must be its own separate object
-        # So we can no longer rely on a global level_geometry object that gets booleaned around by each brush
-        # we now need to treat each brush separately
+        # The new algo works to achieve this goal: each shape must be its own separate object
+        # So we can no longer rely on a global level_geometry object that gets booleaned around by each shape
+        # we now need to treat each shape separately
 
         # get output collection
-        levelCollection = get_add_collection(scene, 'LEVEL')
+        levelCollection = get_add_collection(scene, 'BLE_LEVEL')
         levelCollection.hide_select = False
-        brushCollection = get_add_collection(scene, 'BRUSHES')
-        brushCollection.hide_select = False
+        shapeCollection = get_add_collection(scene, 'BLE_SHAPES')
+        shapeCollection.hide_select = False
 
-        # clear output collection
-        for obj in levelCollection.all_objects:
+        # clear output collections
+        for obj in levelCollection.objects:
             levelCollection.objects.unlink(obj)
 
-        # get brushes only
-        brushes = get_all_brushes()
+        # cleanup
+        remove_not_used()
 
-        # update brushes
-        for brush in brushes:
-            # unlink from everything
-            for col in brush.users_collection:
-                col.objects.unlink(brush)
-            
-            # if has no geom then remove
-            if len(brush.data.vertices) < 3:
-                brushes.remove(brush)
-            else:
-                brushCollection.objects.link(brush)
-                update_brush(brush)
+        # look for shapees
+        shapees = get_shapees(
+            [scene.collection, levelCollection, shapeCollection])
 
-        # cache brush boolean objects (they are just remove_material blobs)
+        # unlink shapees from old collection
+        for shape in shapees:
+            for col in shape.users_collection:
+                col.objects.unlink(shape)
+
+        # if has no geom then remove
+        for shape in shapees:
+            if len(shape.data.vertices) < 3:
+                shapees.remove(shape)
+                continue
+
+        # update + link shapees
+        for shape in shapees:
+            update_shape(shape)
+            shapeCollection.objects.link(shape)
+
+        # cache shape boolean objects (they are just remove_material blobs)
         booleans = {}
-        for brush in brushes:
-            brushBoolean = eval_brush(brush)
-            make_brush_boolean(brushBoolean)
-            booleans[brush] = brushBoolean
+        for shape in shapees:
+            shapeBoolean = eval_shape(shape)
+            make_shape_boolean(shapeBoolean)
+            booleans[shape] = shapeBoolean
 
-        # create/duplicate brushes to output
-        for currentBrush in brushes:
-            currentRoom = eval_brush(currentBrush)
+        # create/duplicate shapees to output
+        for currentShape in shapees:
+            currentRoom = eval_shape(currentShape)
             currentRoom.display_type = 'TEXTURED'
-            copy_materials(currentBrush, currentRoom)
+            copy_materials(currentShape, currentRoom)
             removeMaterialIndex = len(currentRoom.data.materials)
             set_material_slots_size(currentRoom, len(
                 currentRoom.data.materials) + 1)
             currentRoom.data.materials[removeMaterialIndex] = bpy.data.materials[bpy.context.scene.ble_remove_material]
             levelCollection.objects.link(currentRoom)
-            for otherBrush in brushes:
-                if currentBrush == otherBrush:
+            for otherShape in shapees:
+                if currentShape == otherShape:
                     continue
-                # if not in_bounds(currentBrush,otherBrush):
+                # if not in_bounds(currentShape,otherShape):
                     # continue
-                otherBoolean = booleans[otherBrush]
-                apply_brush_csg(currentRoom, otherBoolean,
-                                csg_operation_to_blender_boolean["SUBTRACT"])
+                otherBoolean = booleans[otherShape]
+                apply_shape_csg(currentRoom, otherBoolean, '')
             apply_remove_material(currentRoom)
-            if currentBrush.ble_brush_type == 'SECTOR' or (currentBrush.ble_brush_type == 'BRUSH' and currentBrush.ble_brush_auto_texture):
+            if currentShape.ble_shape_type == 'SECTOR2D' or currentShape.ble_shape_auto_texture:
                 auto_texture(currentRoom)
             if bpy.context.scene.ble_flip_normals:
                 flip_normals(currentRoom)
@@ -645,16 +647,8 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
         if wasEditMode:
             bpy.ops.object.mode_set(mode='EDIT')
 
-        # remove trash
-        for obj in bpy.data.objects:
-            if obj.users == 0:
-                bpy.data.objects.remove(obj, do_unlink=True)
-        for mesh in bpy.data.meshes:
-            if mesh.users == 0:
-                bpy.data.meshes.remove(mesh, do_unlink=True)
-        for material in bpy.data.materials:
-            if material.users == 0:
-                bpy.data.materials.remove(material, do_unlink=True)
+        # cleanup
+        remove_not_used()
 
         return {"FINISHED"}
 
@@ -663,23 +657,23 @@ class BlenderLevelEditorNewGeometry(bpy.types.Operator):
     bl_idname = "scene.ble_new_geometry"
     bl_label = "New Geometry"
 
-    brush_type: bpy.props.StringProperty(name="brush_type", default='NONE')
+    shape_type: bpy.props.StringProperty(name="shape_type", default='NONE')
 
     def execute(self, context):
         bpy.ops.object.select_all(action='DESELECT')
 
-        if self.brush_type == 'SECTOR':
+        if self.shape_type == 'SECTOR2D':
             bpy.ops.mesh.primitive_plane_add(size=2)
         else:
             bpy.ops.mesh.primitive_cube_add(size=2)
 
-        brush = bpy.context.active_object
-        brush.name = self.brush_type
-        brush.data.name = self.brush_type
-        brush.ble_brush_type = self.brush_type
+        shape = bpy.context.active_object
+        shape.name = self.shape_type
+        shape.data.name = self.shape_type
+        shape.ble_shape_type = self.shape_type
 
-        initialize_brush(brush)
-        update_brush(brush)
+        initialize_shape(shape)
+        update_shape(shape)
 
         return {"FINISHED"}
 
@@ -787,7 +781,7 @@ class BlenderLevelEditorRipGeometry(bpy.types.Operator):
             ripedMesh.from_pydata([x.co for x in pyVerts], [], pyFaces)
 
         # remove from riped
-        if activeObj.brush_type != 'BRUSH' and len(selectedFaces) > 0:
+        if activeObj.ble_shape_type == 'SECTOR2D' and len(selectedFaces) > 0:
             edgesToRemove = []
             for f in selectedFaces:
                 for e in f.edges:
@@ -814,7 +808,7 @@ class BlenderLevelEditorRipGeometry(bpy.types.Operator):
         for col in activeObj.users_collection:
             col.objects.link(ripedObj)
         ripedObj.data = ripedMesh
-        copy_materials(ripedObj, activeObj)
+        copy_materials(activeObj, ripedObj)
 
         activeObjBM.free()
         ripedObjBM.free()
