@@ -217,18 +217,11 @@ def apply_shape_csg(target, shapeBoolean, operation):
     bpy.context.view_layer.objects.active = target
     target.select_set(True)
 
-    mod0 = target.modifiers.new(name='bool0', type='BOOLEAN')
-    mod0.object = shapeBoolean
-    mod0.solver = 'EXACT'
-    mod0.operation = 'UNION'
-
-    mod1 = target.modifiers.new(name='bool1', type='BOOLEAN')
-    mod1.object = shapeBoolean
-    mod1.solver = 'EXACT'
-    mod1.operation = 'DIFFERENCE'
-
+    mod = target.modifiers.new(name='bool0', type='BOOLEAN')
+    mod.object = shapeBoolean
+    mod.solver = 'EXACT'
+    mod.operation = 'UNION'
     bpy.ops.object.modifier_apply(modifier='bool0')
-    bpy.ops.object.modifier_apply(modifier='bool1')
 
 
 def apply_remove_material(shape):
