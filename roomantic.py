@@ -27,10 +27,10 @@ from copy import copy
 bl_info = {
     "name": "ROOMantic",
     "author": "HickVieira",
-    "version": (0, 1),
+    "version": (0, 9),
     "blender": (3, 3, 0),
     "location": "View3D > Tools > ROOMantic",
-    "description": "Toolbox for room/sector based game level creation",
+    "description": "Toolbox for doom-style sector-based game level creation",
     "warning": "WIP",
     "wiki_url": "",
     "category": "Object",
@@ -146,9 +146,12 @@ def update_sector2d(shape):
 
 
 def update_shape_precision(shape):
-    shape.location.x = round(shape.location.x, bpy.context.scene.rmtc_precision)
-    shape.location.y = round(shape.location.y, bpy.context.scene.rmtc_precision)
-    shape.location.z = round(shape.location.z, bpy.context.scene.rmtc_precision)
+    shape.location.x = round(
+        shape.location.x, bpy.context.scene.rmtc_precision)
+    shape.location.y = round(
+        shape.location.y, bpy.context.scene.rmtc_precision)
+    shape.location.z = round(
+        shape.location.z, bpy.context.scene.rmtc_precision)
 
     for v in shape.data.vertices:
         v.co.x = round(v.co.x, bpy.context.scene.rmtc_precision)
@@ -188,6 +191,14 @@ def copy_transforms(source, target):
     target.location = source.location
     target.scale = source.scale
     target.rotation_euler = source.rotation_euler
+
+
+def create_remove_material():
+    newMat = bpy.data.materials.new('REMOVE')
+    newMat.name = 'REMOVE'
+    newMat.diffuse_color = [1, 0, 1, 1]
+    newMat.use_fake_user = True
+    return newMat
 
 
 def eval_shape(shape):
@@ -253,7 +264,6 @@ def apply_remove_material(shape):
             bpy.ops.mesh.delete(type='FACE')
             bpy.ops.object.editmode_toggle()
             bpy.ops.object.material_slot_remove()
-
 
 
 def flip_normals(shape):
@@ -373,6 +383,7 @@ def apply_auto_texture(shape):
     bm.free()
 
     shape.data = mesh
+
 
 def apply_triangulate(shape):
     bpy.ops.object.select_all(action='DESELECT')
@@ -581,6 +592,10 @@ class ROOManticBuild(bpy.types.Operator):
         # The new algo works to achieve this goal: each shape must be its own separate object
         # So we can no longer rely on a global level_geometry object that gets booleaned around by each shape
         # we now need to treat each shape separately
+
+         # make sure remove_materials is present
+        if context.scene.rmtc_remove_material == '' or context.scene.rmtc_remove_material is None or context.scene.rmtc_remove_material not in bpy.data.materials:
+            context.scene.rmtc_remove_material = create_remove_material().name
 
         # get output collection
         levelCollection = get_add_collection(context.scene, 'ROOMantic_LEVEL')
