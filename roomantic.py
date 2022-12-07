@@ -25,12 +25,12 @@ from copy import copy
 
 
 bl_info = {
-    "name": "Blender Level Editor",
+    "name": "ROOMantic",
     "author": "HickVieira",
     "version": (0, 1),
     "blender": (3, 3, 0),
-    "location": "View3D > Tools > BLE",
-    "description": "Toolbox for sector based game level creation",
+    "location": "View3D > Tools > ROOMantic",
+    "description": "Toolbox for room/sector based game level creation",
     "warning": "WIP",
     "wiki_url": "",
     "category": "Object",
@@ -47,30 +47,30 @@ def _update_sector_solidify(self, context):
 def update_sector2d_solidify(shape):
     if shape.modifiers:
         mod = shape.modifiers[0]
-        mod.thickness = shape.ble_ceiling_height - shape.ble_floor_height
-        mod.offset = 1 + shape.ble_floor_height / (mod.thickness / 2)
+        mod.thickness = shape.rmtc_ceiling_height - shape.rmtc_floor_height
+        mod.offset = 1 + shape.rmtc_floor_height / (mod.thickness / 2)
 
 
 def is_shape(obj):
-    return obj.ble_shape_type != 'NONE'
+    return obj.rmtc_shape_type != 'NONE'
 
 
 def initialize_shape(shape):
     if is_shape(shape):
         shape.display_type = 'WIRE'
 
-        shape.ble_ceiling_height = 4
-        shape.ble_floor_height = 0
-        shape.ble_shape_auto_texture = True
-        shape.ble_floor_texture = ''
-        shape.ble_wall_texture = ''
-        shape.ble_ceiling_texture = ''
-        shape.ble_ceiling_texture_scale_offset = (1.0, 1.0, 0.0, 0.0)
-        shape.ble_wall_texture_scale_offset = (1.0, 1.0, 0.0, 0.0)
-        shape.ble_floor_texture_scale_offset = (1.0, 1.0, 0.0, 0.0)
-        shape.ble_ceiling_texture_rotation = 0
-        shape.ble_wall_texture_rotation = 0
-        shape.ble_floor_texture_rotation = 0
+        shape.rmtc_ceiling_height = 4
+        shape.rmtc_floor_height = 0
+        shape.rmtc_shape_auto_texture = True
+        shape.rmtc_floor_texture = ''
+        shape.rmtc_wall_texture = ''
+        shape.rmtc_ceiling_texture = ''
+        shape.rmtc_ceiling_texture_scale_offset = (1.0, 1.0, 0.0, 0.0)
+        shape.rmtc_wall_texture_scale_offset = (1.0, 1.0, 0.0, 0.0)
+        shape.rmtc_floor_texture_scale_offset = (1.0, 1.0, 0.0, 0.0)
+        shape.rmtc_ceiling_texture_rotation = 0
+        shape.rmtc_wall_texture_rotation = 0
+        shape.rmtc_floor_texture_rotation = 0
 
 
 def _get_add_collection(name):
@@ -137,23 +137,23 @@ def update_sector2d(shape):
     set_material_slots_size(shape, 3)
 
     # update update
-    if bpy.data.materials.find(shape.ble_ceiling_texture) != -1:
-        shape.material_slots[0].material = bpy.data.materials[shape.ble_ceiling_texture]
-    if bpy.data.materials.find(shape.ble_floor_texture) != -1:
-        shape.material_slots[1].material = bpy.data.materials[shape.ble_floor_texture]
-    if bpy.data.materials.find(shape.ble_wall_texture) != -1:
-        shape.material_slots[2].material = bpy.data.materials[shape.ble_wall_texture]
+    if bpy.data.materials.find(shape.rmtc_ceiling_texture) != -1:
+        shape.material_slots[0].material = bpy.data.materials[shape.rmtc_ceiling_texture]
+    if bpy.data.materials.find(shape.rmtc_floor_texture) != -1:
+        shape.material_slots[1].material = bpy.data.materials[shape.rmtc_floor_texture]
+    if bpy.data.materials.find(shape.rmtc_wall_texture) != -1:
+        shape.material_slots[2].material = bpy.data.materials[shape.rmtc_wall_texture]
 
 
 def update_shape_precision(shape):
-    shape.location.x = round(shape.location.x, bpy.context.scene.ble_precision)
-    shape.location.y = round(shape.location.y, bpy.context.scene.ble_precision)
-    shape.location.z = round(shape.location.z, bpy.context.scene.ble_precision)
+    shape.location.x = round(shape.location.x, bpy.context.scene.rmtc_precision)
+    shape.location.y = round(shape.location.y, bpy.context.scene.rmtc_precision)
+    shape.location.z = round(shape.location.z, bpy.context.scene.rmtc_precision)
 
     for v in shape.data.vertices:
-        v.co.x = round(v.co.x, bpy.context.scene.ble_precision)
-        v.co.y = round(v.co.y, bpy.context.scene.ble_precision)
-        v.co.z = round(v.co.z, bpy.context.scene.ble_precision)
+        v.co.x = round(v.co.x, bpy.context.scene.rmtc_precision)
+        v.co.y = round(v.co.y, bpy.context.scene.rmtc_precision)
+        v.co.z = round(v.co.z, bpy.context.scene.rmtc_precision)
 
 
 def update_shape(shape):
@@ -162,7 +162,7 @@ def update_shape(shape):
 
         update_shape_precision(shape)
 
-        if shape.ble_shape_type == 'SECTOR2D':
+        if shape.rmtc_shape_type == 'SECTOR2D':
             update_sector2d(shape)
 
 
@@ -170,8 +170,8 @@ def get_shapes(collections):
     shapes = []
     for col in collections:
         for obj in col.all_objects:
-            if obj.ble_shape_type is not None:
-                if obj.ble_shape_type != 'NONE':
+            if obj.rmtc_shape_type is not None:
+                if obj.rmtc_shape_type != 'NONE':
                     if obj not in shapes:
                         shapes.append(obj)
     return shapes
@@ -197,7 +197,7 @@ def eval_shape(shape):
     mesh.use_auto_smooth = shape.data.use_auto_smooth
     mesh.auto_smooth_angle = shape.data.auto_smooth_angle
 
-    roomName = "ble_" + shape.name
+    roomName = "rmtc_" + shape.name
     room = bpy.data.objects.new(roomName, mesh)
     room.name = roomName
 
@@ -215,7 +215,7 @@ def create_mesh_obj(name):
 
 def make_shape_boolean(shape):
     set_material_slots_size(shape, 1)
-    shape.data.materials[0] = bpy.data.materials[bpy.context.scene.ble_remove_material]
+    shape.data.materials[0] = bpy.data.materials[bpy.context.scene.rmtc_remove_material]
 
 
 def apply_csg(target, boolean, operation):
@@ -235,11 +235,11 @@ def apply_remove_material(shape):
     bpy.context.view_layer.objects.active = shape
     shape.select_set(True)
 
-    if bpy.context.scene.ble_remove_material is not "":
+    if bpy.context.scene.rmtc_remove_material is not "":
         i = 0
         remove = False
         for m in shape.material_slots:
-            if bpy.context.scene.ble_remove_material == m.name:
+            if bpy.context.scene.rmtc_remove_material == m.name:
                 remove = True
             else:
                 if not remove:
@@ -323,51 +323,51 @@ def apply_auto_texture(shape):
             if faceDirection == "x":
                 luv.uv.x = ((l.vert.co.y * objectScale[1]) + objectLocation[1])
                 luv.uv.y = ((l.vert.co.z * objectScale[2]) + objectLocation[2])
-                luv.uv = rotate2D(luv.uv, shape.ble_wall_texture_rotation)
+                luv.uv = rotate2D(luv.uv, shape.rmtc_wall_texture_rotation)
                 luv.uv.x = translate(scale(
-                    luv.uv.x, shape.ble_wall_texture_scale_offset[0]), shape.ble_wall_texture_scale_offset[2])
+                    luv.uv.x, shape.rmtc_wall_texture_scale_offset[0]), shape.rmtc_wall_texture_scale_offset[2])
                 luv.uv.y = translate(scale(
-                    luv.uv.y, shape.ble_wall_texture_scale_offset[1]), shape.ble_wall_texture_scale_offset[3])
+                    luv.uv.y, shape.rmtc_wall_texture_scale_offset[1]), shape.rmtc_wall_texture_scale_offset[3])
             if faceDirection == "-x":
                 luv.uv.x = ((l.vert.co.y * objectScale[1]) + objectLocation[1])
                 luv.uv.y = ((l.vert.co.z * objectScale[2]) + objectLocation[2])
-                luv.uv = rotate2D(luv.uv, shape.ble_wall_texture_rotation)
+                luv.uv = rotate2D(luv.uv, shape.rmtc_wall_texture_rotation)
                 luv.uv.x = translate(scale(
-                    luv.uv.x, shape.ble_wall_texture_scale_offset[0]), shape.ble_wall_texture_scale_offset[2])
+                    luv.uv.x, shape.rmtc_wall_texture_scale_offset[0]), shape.rmtc_wall_texture_scale_offset[2])
                 luv.uv.y = translate(scale(
-                    luv.uv.y, shape.ble_wall_texture_scale_offset[1]), shape.ble_wall_texture_scale_offset[3])
+                    luv.uv.y, shape.rmtc_wall_texture_scale_offset[1]), shape.rmtc_wall_texture_scale_offset[3])
             if faceDirection == "y":
                 luv.uv.x = ((l.vert.co.x * objectScale[0]) + objectLocation[0])
                 luv.uv.y = ((l.vert.co.z * objectScale[2]) + objectLocation[2])
-                luv.uv = rotate2D(luv.uv, shape.ble_wall_texture_rotation)
+                luv.uv = rotate2D(luv.uv, shape.rmtc_wall_texture_rotation)
                 luv.uv.x = translate(scale(
-                    luv.uv.x, shape.ble_wall_texture_scale_offset[0]), shape.ble_wall_texture_scale_offset[2])
+                    luv.uv.x, shape.rmtc_wall_texture_scale_offset[0]), shape.rmtc_wall_texture_scale_offset[2])
                 luv.uv.y = translate(scale(
-                    luv.uv.y, shape.ble_wall_texture_scale_offset[1]), shape.ble_wall_texture_scale_offset[3])
+                    luv.uv.y, shape.rmtc_wall_texture_scale_offset[1]), shape.rmtc_wall_texture_scale_offset[3])
             if faceDirection == "-y":
                 luv.uv.x = ((l.vert.co.x * objectScale[0]) + objectLocation[0])
                 luv.uv.y = ((l.vert.co.z * objectScale[2]) + objectLocation[2])
-                luv.uv = rotate2D(luv.uv, shape.ble_wall_texture_rotation)
+                luv.uv = rotate2D(luv.uv, shape.rmtc_wall_texture_rotation)
                 luv.uv.x = translate(scale(
-                    luv.uv.x, shape.ble_wall_texture_scale_offset[0]), shape.ble_wall_texture_scale_offset[2])
+                    luv.uv.x, shape.rmtc_wall_texture_scale_offset[0]), shape.rmtc_wall_texture_scale_offset[2])
                 luv.uv.y = translate(scale(
-                    luv.uv.y, shape.ble_wall_texture_scale_offset[1]), shape.ble_wall_texture_scale_offset[3])
+                    luv.uv.y, shape.rmtc_wall_texture_scale_offset[1]), shape.rmtc_wall_texture_scale_offset[3])
             if faceDirection == "z":
                 luv.uv.x = ((l.vert.co.x * objectScale[0]) + objectLocation[0])
                 luv.uv.y = ((l.vert.co.y * objectScale[1]) + objectLocation[1])
-                luv.uv = rotate2D(luv.uv, shape.ble_ceiling_texture_rotation)
+                luv.uv = rotate2D(luv.uv, shape.rmtc_ceiling_texture_rotation)
                 luv.uv.x = translate(scale(
-                    luv.uv.x, shape.ble_ceiling_texture_scale_offset[0]), shape.ble_ceiling_texture_scale_offset[2])
+                    luv.uv.x, shape.rmtc_ceiling_texture_scale_offset[0]), shape.rmtc_ceiling_texture_scale_offset[2])
                 luv.uv.y = translate(scale(
-                    luv.uv.y, shape.ble_ceiling_texture_scale_offset[1]), shape.ble_ceiling_texture_scale_offset[3])
+                    luv.uv.y, shape.rmtc_ceiling_texture_scale_offset[1]), shape.rmtc_ceiling_texture_scale_offset[3])
             if faceDirection == "-z":
                 luv.uv.x = ((l.vert.co.x * objectScale[0]) + objectLocation[0])
                 luv.uv.y = ((l.vert.co.y * objectScale[1]) + objectLocation[1])
-                luv.uv = rotate2D(luv.uv, shape.ble_floor_texture_rotation)
+                luv.uv = rotate2D(luv.uv, shape.rmtc_floor_texture_rotation)
                 luv.uv.x = translate(scale(
-                    luv.uv.x, shape.ble_floor_texture_scale_offset[0]), shape.ble_floor_texture_scale_offset[2])
+                    luv.uv.x, shape.rmtc_floor_texture_scale_offset[0]), shape.rmtc_floor_texture_scale_offset[2])
                 luv.uv.y = translate(scale(
-                    luv.uv.y, shape.ble_floor_texture_scale_offset[1]), shape.ble_floor_texture_scale_offset[3])
+                    luv.uv.y, shape.rmtc_floor_texture_scale_offset[1]), shape.rmtc_floor_texture_scale_offset[3])
 
     bm.to_mesh(mesh)
     bm.free()
@@ -388,23 +388,23 @@ def apply_triangulate(shape):
 
 # DATA
 
-bpy.types.Scene.ble_precision = bpy.props.IntProperty(
+bpy.types.Scene.rmtc_precision = bpy.props.IntProperty(
     name="Precision",
     default=3,
     min=0,
     max=6,
     description='Controls the rounding level of vertex precisions. A level of 1 would round 1.234 to 1.2 and a level of 2 would round to 1.23'
 )
-bpy.types.Scene.ble_flip_normals = bpy.props.BoolProperty(
+bpy.types.Scene.rmtc_flip_normals = bpy.props.BoolProperty(
     name="Flip Normals",
     description='Flip output normals',
     default=True,
 )
-bpy.types.Scene.ble_remove_material = bpy.props.StringProperty(
+bpy.types.Scene.rmtc_remove_material = bpy.props.StringProperty(
     name="Remove Material",
     description="Material used as flag for removing geometry"
 )
-bpy.types.Object.ble_shape_type = bpy.props.EnumProperty(
+bpy.types.Object.rmtc_shape_type = bpy.props.EnumProperty(
     items=[
         ("SECTOR2D", "Sector2D", "is a 2D sector"),
         ("SECTOR3D", "Sector3D", "is a 3D sector"),
@@ -414,35 +414,35 @@ bpy.types.Object.ble_shape_type = bpy.props.EnumProperty(
     name="Shape Type",
     default='NONE'
 )
-bpy.types.Object.ble_ceiling_height = bpy.props.FloatProperty(
+bpy.types.Object.rmtc_ceiling_height = bpy.props.FloatProperty(
     name="Ceiling Height",
     default=4,
     step=10,
     precision=3,
     update=_update_sector_solidify
 )
-bpy.types.Object.ble_floor_height = bpy.props.FloatProperty(
+bpy.types.Object.rmtc_floor_height = bpy.props.FloatProperty(
     name="Floor Height",
     default=0,
     step=10,
     precision=3,
     update=_update_sector_solidify
 )
-bpy.types.Object.ble_shape_auto_texture = bpy.props.BoolProperty(
+bpy.types.Object.rmtc_shape_auto_texture = bpy.props.BoolProperty(
     name="Shape Auto Texture",
     default=True,
     description='Auto Texture on or off'
 )
-bpy.types.Object.ble_floor_texture = bpy.props.StringProperty(
+bpy.types.Object.rmtc_floor_texture = bpy.props.StringProperty(
     name="Floor Texture",
 )
-bpy.types.Object.ble_wall_texture = bpy.props.StringProperty(
+bpy.types.Object.rmtc_wall_texture = bpy.props.StringProperty(
     name="Wall Texture",
 )
-bpy.types.Object.ble_ceiling_texture = bpy.props.StringProperty(
+bpy.types.Object.rmtc_ceiling_texture = bpy.props.StringProperty(
     name="Ceiling Texture",
 )
-bpy.types.Object.ble_ceiling_texture_scale_offset = bpy.props.FloatVectorProperty(
+bpy.types.Object.rmtc_ceiling_texture_scale_offset = bpy.props.FloatVectorProperty(
     name="Ceiling Texture Scale Offset",
     default=(1, 1, 0, 0),
     min=0,
@@ -450,7 +450,7 @@ bpy.types.Object.ble_ceiling_texture_scale_offset = bpy.props.FloatVectorPropert
     precision=3,
     size=4
 )
-bpy.types.Object.ble_wall_texture_scale_offset = bpy.props.FloatVectorProperty(
+bpy.types.Object.rmtc_wall_texture_scale_offset = bpy.props.FloatVectorProperty(
     name="Wall Texture Scale Offset",
     default=(1, 1, 0, 0),
     min=0,
@@ -458,7 +458,7 @@ bpy.types.Object.ble_wall_texture_scale_offset = bpy.props.FloatVectorProperty(
     precision=3,
     size=4
 )
-bpy.types.Object.ble_floor_texture_scale_offset = bpy.props.FloatVectorProperty(
+bpy.types.Object.rmtc_floor_texture_scale_offset = bpy.props.FloatVectorProperty(
     name="Floor Texture Scale Offset",
     default=(1, 1, 0, 0),
     min=0,
@@ -466,21 +466,21 @@ bpy.types.Object.ble_floor_texture_scale_offset = bpy.props.FloatVectorProperty(
     precision=3,
     size=4
 )
-bpy.types.Object.ble_ceiling_texture_rotation = bpy.props.FloatProperty(
+bpy.types.Object.rmtc_ceiling_texture_rotation = bpy.props.FloatProperty(
     name="Ceiling Texture Rotation",
     default=0,
     min=0,
     step=10,
     precision=3,
 )
-bpy.types.Object.ble_wall_texture_rotation = bpy.props.FloatProperty(
+bpy.types.Object.rmtc_wall_texture_rotation = bpy.props.FloatProperty(
     name="Wall Texture Rotation",
     default=0,
     min=0,
     step=10,
     precision=3,
 )
-bpy.types.Object.ble_floor_texture_rotation = bpy.props.FloatProperty(
+bpy.types.Object.rmtc_floor_texture_rotation = bpy.props.FloatProperty(
     name="Floor Texture Rotation",
     default=0,
     min=0,
@@ -495,11 +495,11 @@ bpy.types.Object.ble_floor_texture_rotation = bpy.props.FloatProperty(
 # CLASSES
 
 
-class BlenderLevelEditorPanel(bpy.types.Panel):
-    bl_label = "Blender Level Editor"
+class ROOManticPanel(bpy.types.Panel):
+    bl_label = "ROOMantic"
     bl_space_type = "VIEW_3D"
     bl_region_type = 'UI'
-    bl_category = 'Blender Level Editor'
+    bl_category = 'ROOMantic'
 
     def draw(self, context):
         obj = context.active_object
@@ -509,74 +509,72 @@ class BlenderLevelEditorPanel(bpy.types.Panel):
         # base
         col = layout.column(align=True)
         col.label(icon="WORLD", text="Map Settings")
-        col.prop(scene, "ble_flip_normals")
-        col.prop(scene, "ble_precision")
-        col.prop_search(scene, "ble_remove_material", bpy.data, "materials")
+        col.prop(scene, "rmtc_flip_normals")
+        col.prop(scene, "rmtc_precision")
+        col.prop_search(scene, "rmtc_remove_material", bpy.data, "materials")
         col = layout.column(align=True)
-        col.operator("scene.ble_build", text="Build", icon="MOD_BUILD")
+        col.operator("scene.rmtc_build", text="Build", icon="MOD_BUILD")
 
         # tools
         col = layout.column(align=True)
         col.label(icon="SNAP_PEEL_OBJECT", text="Tools")
-        col.operator("scene.ble_open_material",
+        col.operator("scene.rmtc_open_material",
                      text="Open Material", icon="TEXTURE")
         if bpy.context.mode == 'EDIT_MESH':
-            col.operator("object.ble_rip_geometry", text="Rip To",
+            col.operator("object.rmtc_rip_geometry", text="Rip To",
                          icon="UNLINKED").focus_to_rip = True
-            col.operator("object.ble_rip_geometry", text="Rip Stay",
+            col.operator("object.rmtc_rip_geometry", text="Rip Stay",
                          icon="UNLINKED").focus_to_rip = False
         else:
-            col.operator("scene.ble_new_geometry", text="New Sector2D",
+            col.operator("scene.rmtc_new_geometry", text="New Sector2D",
                          icon="MESH_PLANE").shape_type = 'SECTOR2D'
-            col.operator("scene.ble_new_geometry", text="New Sector3D",
+            col.operator("scene.rmtc_new_geometry", text="New Sector3D",
                          icon="CUBE").shape_type = 'SECTOR3D'
-            col.operator("scene.ble_new_geometry", text="New Brush",
+            col.operator("scene.rmtc_new_geometry", text="New Brush",
                          icon="CUBE").shape_type = 'BRUSH'
 
         # object
         if obj is not None:
             col = layout.column(align=True)
             col.label(icon="MOD_ARRAY", text="Shape Properties")
-            col.prop(obj, "ble_shape_type", text="Shape Type")
-            col.prop(obj, "ble_shape_auto_texture", text="Auto Texture")
-            if obj.ble_shape_auto_texture:
+            col.prop(obj, "rmtc_shape_type", text="Shape Type")
+            col.prop(obj, "rmtc_shape_auto_texture", text="Auto Texture")
+            if obj.rmtc_shape_auto_texture:
                 col = layout.row(align=True)
-                col.prop(obj, "ble_ceiling_texture_scale_offset")
+                col.prop(obj, "rmtc_ceiling_texture_scale_offset")
                 col = layout.row(align=True)
-                col.prop(obj, "ble_wall_texture_scale_offset")
+                col.prop(obj, "rmtc_wall_texture_scale_offset")
                 col = layout.row(align=True)
-                col.prop(obj, "ble_floor_texture_scale_offset")
+                col.prop(obj, "rmtc_floor_texture_scale_offset")
                 col = layout.row(align=True)
-                col.prop(obj, "ble_ceiling_texture_rotation")
+                col.prop(obj, "rmtc_ceiling_texture_rotation")
                 col = layout.row(align=True)
-                col.prop(obj, "ble_wall_texture_rotation")
+                col.prop(obj, "rmtc_wall_texture_rotation")
                 col = layout.row(align=True)
-                col.prop(obj, "ble_floor_texture_rotation")
-            if obj.ble_shape_type == 'SECTOR2D':
+                col.prop(obj, "rmtc_floor_texture_rotation")
+            if obj.rmtc_shape_type == 'SECTOR2D':
                 col = layout.column(align=True)
                 col.label(icon="MOD_ARRAY", text="Sector Properties")
-                col.prop(obj, "ble_ceiling_height")
-                col.prop(obj, "ble_floor_height")
+                col.prop(obj, "rmtc_ceiling_height")
+                col.prop(obj, "rmtc_floor_height")
                 # layout.separator()
                 col = layout.column(align=True)
-                col.prop_search(obj, "ble_ceiling_texture", bpy.data,
+                col.prop_search(obj, "rmtc_ceiling_texture", bpy.data,
                                 "materials", icon="MATERIAL", text="Ceiling")
-                col.prop_search(obj, "ble_wall_texture", bpy.data,
+                col.prop_search(obj, "rmtc_wall_texture", bpy.data,
                                 "materials", icon="MATERIAL", text="Wall")
-                col.prop_search(obj, "ble_floor_texture", bpy.data,
+                col.prop_search(obj, "rmtc_floor_texture", bpy.data,
                                 "materials", icon="MATERIAL", text="Floor")
 
 
-class BlenderLevelEditorBuild(bpy.types.Operator):
-    bl_idname = "scene.ble_build"
+class ROOManticBuild(bpy.types.Operator):
+    bl_idname = "scene.rmtc_build"
     bl_label = "Build"
 
     def execute(self, context):
-        scene = bpy.context.scene
-
         # save context
         wasEditMode = False
-        if bpy.context.mode == 'EDIT_MESH':
+        if context.mode == 'EDIT_MESH':
             bpy.ops.object.mode_set(mode='OBJECT')
             wasEditMode = True
 
@@ -585,9 +583,9 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
         # we now need to treat each shape separately
 
         # get output collection
-        levelCollection = get_add_collection(scene, 'BLE_LEVEL')
+        levelCollection = get_add_collection(context.scene, 'ROOMantic_LEVEL')
         levelCollection.hide_select = False
-        shapeCollection = get_add_collection(scene, 'BLE_SHAPES')
+        shapeCollection = get_add_collection(context.scene, 'ROOMantic_SHAPES')
         shapeCollection.hide_select = False
 
         # clear output collections
@@ -599,7 +597,7 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
 
         # look for shapes
         shapes = get_shapes(
-            [scene.collection, levelCollection, shapeCollection])
+            [context.scene.collection, levelCollection, shapeCollection])
 
         # optimization
         hasBrushes = False
@@ -608,7 +606,7 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
         for shape in shapes:
             for col in shape.users_collection:
                 col.objects.unlink(shape)
-            if shape.ble_shape_type == 'BRUSH':
+            if shape.rmtc_shape_type == 'BRUSH':
                 hasBrushes = True
 
         # if has no geom then remove
@@ -625,13 +623,13 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
         # cache shape boolean objects (they are just remove_material blobs)
         shapeBooleans = {}
         brushBoolean = create_mesh_obj('brushBoolean') if hasBrushes else None
-        bpy.context.scene.collection.objects.link(brushBoolean)
+        context.scene.collection.objects.link(brushBoolean)
         for shape in shapes:
             shapeBoolean = eval_shape(shape)
             make_shape_boolean(shapeBoolean)
             shapeBooleans[shape] = shapeBoolean
             if hasBrushes:
-                if shape.ble_shape_type != 'BRUSH':
+                if shape.rmtc_shape_type != 'BRUSH':
                     apply_csg(brushBoolean, shapeBoolean, 'UNION')
 
         # create/duplicate shapes to output
@@ -642,10 +640,10 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
             removeMaterialIndex = len(evaluatedShape.data.materials)
             set_material_slots_size(evaluatedShape, len(
                 evaluatedShape.data.materials) + 1)
-            evaluatedShape.data.materials[removeMaterialIndex] = bpy.data.materials[bpy.context.scene.ble_remove_material]
+            evaluatedShape.data.materials[removeMaterialIndex] = bpy.data.materials[context.scene.rmtc_remove_material]
             levelCollection.objects.link(evaluatedShape)
 
-            if currentShape.ble_shape_type == 'SECTOR2D' or currentShape.ble_shape_type == 'SECTOR3D':
+            if currentShape.rmtc_shape_type == 'SECTOR2D' or currentShape.rmtc_shape_type == 'SECTOR3D':
                 for otherShape in shapes:
                     if currentShape == otherShape:
                         continue
@@ -654,7 +652,7 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
                     otherBoolean = shapeBooleans[otherShape]
                     apply_csg(evaluatedShape, otherBoolean, 'UNION')
 
-                    if bpy.context.scene.ble_flip_normals:
+                    if context.scene.rmtc_flip_normals:
                         flip_normals(evaluatedShape)
             else:
                 apply_csg(evaluatedShape, brushBoolean, 'INTERSECT')
@@ -663,7 +661,7 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
 
             apply_triangulate(evaluatedShape)
 
-            if currentShape.ble_shape_type == 'SECTOR2D' or currentShape.ble_shape_auto_texture:
+            if currentShape.rmtc_shape_type == 'SECTOR2D' or currentShape.rmtc_shape_auto_texture:
                 apply_auto_texture(evaluatedShape)
 
         # mark unselectable
@@ -676,7 +674,7 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
 
         # unlink brushBoolean
         if hasBrushes:
-            bpy.context.scene.collection.objects.unlink(brushBoolean)
+            context.scene.collection.objects.unlink(brushBoolean)
 
         # cleanup
         remove_not_used()
@@ -684,8 +682,8 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class BlenderLevelEditorNewGeometry(bpy.types.Operator):
-    bl_idname = "scene.ble_new_geometry"
+class ROOManticNewGeometry(bpy.types.Operator):
+    bl_idname = "scene.rmtc_new_geometry"
     bl_label = "New Geometry"
 
     shape_type: bpy.props.StringProperty(name="shape_type", default='NONE')
@@ -701,7 +699,7 @@ class BlenderLevelEditorNewGeometry(bpy.types.Operator):
         shape = bpy.context.active_object
         shape.name = self.shape_type
         shape.data.name = self.shape_type
-        shape.ble_shape_type = self.shape_type
+        shape.rmtc_shape_type = self.shape_type
 
         initialize_shape(shape)
         update_shape(shape)
@@ -709,8 +707,8 @@ class BlenderLevelEditorNewGeometry(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class BlenderLevelEditorOpenMaterial(bpy.types.Operator, ImportHelper):
-    bl_idname = "scene.ble_open_material"
+class ROOManticOpenMaterial(bpy.types.Operator, ImportHelper):
+    bl_idname = "scene.rmtc_open_material"
     bl_label = "Open Material"
 
     filter_glob: bpy.props.StringProperty(
@@ -768,8 +766,8 @@ class BlenderLevelEditorOpenMaterial(bpy.types.Operator, ImportHelper):
         return {"FINISHED"}
 
 
-class BlenderLevelEditorRipGeometry(bpy.types.Operator):
-    bl_idname = "object.ble_rip_geometry"
+class ROOManticRipGeometry(bpy.types.Operator):
+    bl_idname = "object.rmtc_rip_geometry"
     bl_label = "Rip Geometry"
 
     focus_to_rip: bpy.props.BoolProperty(
@@ -812,7 +810,7 @@ class BlenderLevelEditorRipGeometry(bpy.types.Operator):
             ripedMesh.from_pydata([x.co for x in pyVerts], [], pyFaces)
 
         # remove from riped
-        if activeObj.ble_shape_type == 'SECTOR2D' and len(selectedFaces) > 0:
+        if activeObj.rmtc_shape_type == 'SECTOR2D' and len(selectedFaces) > 0:
             edgesToRemove = []
             for f in selectedFaces:
                 for e in f.edges:
@@ -867,19 +865,19 @@ class BlenderLevelEditorRipGeometry(bpy.types.Operator):
 
 
 def register():
-    bpy.utils.register_class(BlenderLevelEditorPanel)
-    bpy.utils.register_class(BlenderLevelEditorBuild)
-    bpy.utils.register_class(BlenderLevelEditorNewGeometry)
-    bpy.utils.register_class(BlenderLevelEditorOpenMaterial)
-    bpy.utils.register_class(BlenderLevelEditorRipGeometry)
+    bpy.utils.register_class(ROOManticPanel)
+    bpy.utils.register_class(ROOManticBuild)
+    bpy.utils.register_class(ROOManticNewGeometry)
+    bpy.utils.register_class(ROOManticOpenMaterial)
+    bpy.utils.register_class(ROOManticRipGeometry)
 
 
 def unregister():
-    bpy.utils.unregister_class(BlenderLevelEditorPanel)
-    bpy.utils.unregister_class(BlenderLevelEditorBuild)
-    bpy.utils.unregister_class(BlenderLevelEditorNewGeometry)
-    bpy.utils.unregister_class(BlenderLevelEditorOpenMaterial)
-    bpy.utils.unregister_class(BlenderLevelEditorRipGeometry)
+    bpy.utils.unregister_class(ROOManticPanel)
+    bpy.utils.unregister_class(ROOManticBuild)
+    bpy.utils.unregister_class(ROOManticNewGeometry)
+    bpy.utils.unregister_class(ROOManticOpenMaterial)
+    bpy.utils.unregister_class(ROOManticRipGeometry)
 
 
 if __name__ == "__main__":
