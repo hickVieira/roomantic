@@ -52,7 +52,7 @@ def update_sector2d_solidify(shape):
 
 
 def is_shape(obj):
-    return obj.ble_shape_type is not 'NONE'
+    return obj.ble_shape_type != 'NONE'
 
 
 def initialize_shape(shape):
@@ -166,15 +166,15 @@ def update_shape(shape):
             update_sector2d(shape)
 
 
-def get_shapees(collections):
-    shapees = []
+def get_shapes(collections):
+    shapes = []
     for col in collections:
         for obj in col.all_objects:
             if obj.ble_shape_type is not None:
-                if obj.ble_shape_type is not 'NONE':
-                    if obj not in shapees:
-                        shapees.append(obj)
-    return shapees
+                if obj.ble_shape_type != 'NONE':
+                    if obj not in shapes:
+                        shapes.append(obj)
+    return shapes
 
 
 def copy_materials(source, target):
@@ -207,21 +207,27 @@ def eval_shape(shape):
     return room
 
 
+def create_mesh_obj(name):
+    mesh = bpy.data.meshes.new(name)
+    obj = bpy.data.objects.new(name, mesh)
+    return obj
+
+
 def make_shape_boolean(shape):
     set_material_slots_size(shape, 1)
     shape.data.materials[0] = bpy.data.materials[bpy.context.scene.ble_remove_material]
 
 
-def apply_shape_csg(target, shapeBoolean, operation):
+def apply_csg(target, boolean, operation):
     bpy.ops.object.select_all(action='DESELECT')
     bpy.context.view_layer.objects.active = target
     target.select_set(True)
 
-    mod = target.modifiers.new(name='bool0', type='BOOLEAN')
-    mod.object = shapeBoolean
+    mod = target.modifiers.new(name='boolean', type='BOOLEAN')
+    mod.object = boolean
     mod.solver = 'EXACT'
-    mod.operation = 'UNION'
-    bpy.ops.object.modifier_apply(modifier='bool0')
+    mod.operation = operation
+    bpy.ops.object.modifier_apply(modifier='boolean')
 
 
 def apply_remove_material(shape):
@@ -247,6 +253,7 @@ def apply_remove_material(shape):
             bpy.ops.mesh.delete(type='FACE')
             bpy.ops.object.editmode_toggle()
             bpy.ops.object.material_slot_remove()
+
 
 
 def flip_normals(shape):
@@ -275,7 +282,7 @@ def rotate2D(uv, degrees):
     return newUV
 
 
-def auto_texture(shape):
+def apply_auto_texture(shape):
     mesh = shape.data
     objectLocation = shape.location
     objectScale = shape.scale
@@ -366,6 +373,14 @@ def auto_texture(shape):
     bm.free()
 
     shape.data = mesh
+
+def apply_triangulate(shape):
+    bpy.ops.object.select_all(action='DESELECT')
+    bpy.context.view_layer.objects.active = shape
+    shape.select_set(True)
+
+    mod = shape.modifiers.new(name='triangulate', type='TRIANGULATE')
+    bpy.ops.object.modifier_apply(modifier='triangulate')
 
 
 # FUNCS
@@ -582,55 +597,74 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
         # cleanup
         remove_not_used()
 
-        # look for shapees
-        shapees = get_shapees(
+        # look for shapes
+        shapes = get_shapes(
             [scene.collection, levelCollection, shapeCollection])
 
-        # unlink shapees from old collection
-        for shape in shapees:
+        # optimization
+        hasBrushes = False
+
+        # unlink shapes from old collection
+        for shape in shapes:
             for col in shape.users_collection:
                 col.objects.unlink(shape)
+            if shape.ble_shape_type == 'BRUSH':
+                hasBrushes = True
 
         # if has no geom then remove
-        for shape in shapees:
+        for shape in shapes:
             if len(shape.data.vertices) < 3:
-                shapees.remove(shape)
+                shapes.remove(shape)
                 continue
 
-        # update + link shapees
-        for shape in shapees:
+        # update + link shapes
+        for shape in shapes:
             update_shape(shape)
             shapeCollection.objects.link(shape)
 
         # cache shape boolean objects (they are just remove_material blobs)
-        booleans = {}
-        for shape in shapees:
+        shapeBooleans = {}
+        brushBoolean = create_mesh_obj('brushBoolean') if hasBrushes else None
+        bpy.context.scene.collection.objects.link(brushBoolean)
+        for shape in shapes:
             shapeBoolean = eval_shape(shape)
             make_shape_boolean(shapeBoolean)
-            booleans[shape] = shapeBoolean
+            shapeBooleans[shape] = shapeBoolean
+            if hasBrushes:
+                if shape.ble_shape_type != 'BRUSH':
+                    apply_csg(brushBoolean, shapeBoolean, 'UNION')
 
-        # create/duplicate shapees to output
-        for currentShape in shapees:
-            currentRoom = eval_shape(currentShape)
-            currentRoom.display_type = 'TEXTURED'
-            copy_materials(currentShape, currentRoom)
-            removeMaterialIndex = len(currentRoom.data.materials)
-            set_material_slots_size(currentRoom, len(
-                currentRoom.data.materials) + 1)
-            currentRoom.data.materials[removeMaterialIndex] = bpy.data.materials[bpy.context.scene.ble_remove_material]
-            levelCollection.objects.link(currentRoom)
-            for otherShape in shapees:
-                if currentShape == otherShape:
-                    continue
-                # if not in_bounds(currentShape,otherShape):
-                    # continue
-                otherBoolean = booleans[otherShape]
-                apply_shape_csg(currentRoom, otherBoolean, '')
-            apply_remove_material(currentRoom)
+        # create/duplicate shapes to output
+        for currentShape in shapes:
+            evaluatedShape = eval_shape(currentShape)
+            evaluatedShape.display_type = 'TEXTURED'
+            copy_materials(currentShape, evaluatedShape)
+            removeMaterialIndex = len(evaluatedShape.data.materials)
+            set_material_slots_size(evaluatedShape, len(
+                evaluatedShape.data.materials) + 1)
+            evaluatedShape.data.materials[removeMaterialIndex] = bpy.data.materials[bpy.context.scene.ble_remove_material]
+            levelCollection.objects.link(evaluatedShape)
+
+            if currentShape.ble_shape_type == 'SECTOR2D' or currentShape.ble_shape_type == 'SECTOR3D':
+                for otherShape in shapes:
+                    if currentShape == otherShape:
+                        continue
+                    # if not in_bounds(currentShape,otherShape):
+                        # continue
+                    otherBoolean = shapeBooleans[otherShape]
+                    apply_csg(evaluatedShape, otherBoolean, 'UNION')
+
+                    if bpy.context.scene.ble_flip_normals:
+                        flip_normals(evaluatedShape)
+            else:
+                apply_csg(evaluatedShape, brushBoolean, 'INTERSECT')
+
+            apply_remove_material(evaluatedShape)
+
+            apply_triangulate(evaluatedShape)
+
             if currentShape.ble_shape_type == 'SECTOR2D' or currentShape.ble_shape_auto_texture:
-                auto_texture(currentRoom)
-            if bpy.context.scene.ble_flip_normals:
-                flip_normals(currentRoom)
+                apply_auto_texture(evaluatedShape)
 
         # mark unselectable
         levelCollection.hide_select = True
@@ -639,6 +673,10 @@ class BlenderLevelEditorBuild(bpy.types.Operator):
         bpy.ops.object.select_all(action='DESELECT')
         if wasEditMode:
             bpy.ops.object.mode_set(mode='EDIT')
+
+        # unlink brushBoolean
+        if hasBrushes:
+            bpy.context.scene.collection.objects.unlink(brushBoolean)
 
         # cleanup
         remove_not_used()
