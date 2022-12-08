@@ -16,6 +16,7 @@
 #  ***** END GPL LICENSE BLOCK *****
 
 from bpy_extras.io_utils import ImportHelper
+import addon_utils
 import bmesh
 import bpy
 import math
@@ -26,7 +27,7 @@ from copy import copy
 bl_info = {
     "name": "ROOMantic",
     "author": "HickVieira",
-    "version": (1, 0),
+    "version": (0, 9),
     "blender": (3, 3, 0),
     "location": "View3D > Tools > ROOMantic",
     "description": "Toolbox for doom-style sector-based game level creation",
@@ -37,75 +38,6 @@ bl_info = {
 
 
 # FUNCS
-
-
-class Point:
-    def __init__(self, x, y, z) -> None:
-        self.x = x
-        self.y = y
-        self.z = z
-
-
-class Bounds:
-    def __init__(self) -> None:
-        self.min = None
-        self.max = None
-
-    def encapsulate(self, p: Point):
-        # min
-        if self.min == None:
-            self.min = Point(p.x, p.y, p.z)
-        else:
-            if p.x < self.min.x:
-                self.min.x = p.x
-            if p.y < self.min.y:
-                self.min.y = p.y
-            if p.z < self.min.z:
-                self.min.z = p.z
-
-        # max
-        if self.max == None:
-            self.max = Point(p.x, p.y, p.z)
-        else:
-            if p.x > self.max.x:
-                self.max.x = p.x
-            if p.y > self.max.y:
-                self.max.y = p.y
-            if p.z > self.max.z:
-                self.max.z = p.z
-
-    def expand(self, f):
-        self.min.x -= f
-        self.min.y -= f
-        self.min.z -= f
-        self.max.x += f
-        self.max.y += f
-        self.max.z += f
-
-    def intersect(self, other):
-        return (
-            self.min.x <= other.max.x and
-            self.max.x >= other.min.x and
-            self.min.y <= other.max.y and
-            self.max.y >= other.min.y and
-            self.min.z <= other.max.z and
-            self.max.z >= other.min.z)
-
-
-def calculate_bounds_ws(obj, expand):
-    mat = obj.matrix_world
-    bounds = Bounds()
-    for v in obj.data.vertices:
-        pointWS = mat @ v.co
-        bounds.encapsulate(Point(pointWS.x, pointWS.y, pointWS.z))
-    bounds.expand(expand)
-    # print("obj " + obj.name)
-    # print("bound min " + str(bounds.min.x) + ' ' +
-    #       str(bounds.min.y) + ' ' + str(bounds.min.z) + ' ')
-    # print("bound max " + str(bounds.max.x) + ' ' +
-    #       str(bounds.max.y) + ' ' + str(bounds.max.z) + ' ')
-    # print("----------------------------")
-    return bounds
 
 
 def _update_sector_solidify(self, context):
@@ -461,6 +393,7 @@ def apply_triangulate(shape):
     mod = shape.modifiers.new(name='triangulate', type='TRIANGULATE')
     bpy.ops.object.modifier_apply(modifier='triangulate')
 
+
 # FUNCS
 
 
@@ -472,6 +405,11 @@ bpy.types.Scene.rmtc_precision = bpy.props.IntProperty(
     min=0,
     max=6,
     description='Controls the rounding level of vertex precisions. A level of 1 would round 1.234 to 1.2 and a level of 2 would round to 1.23'
+)
+bpy.types.Scene.rmtc_flip_normals = bpy.props.BoolProperty(
+    name="Flip Normals",
+    description='Flip output normals',
+    default=True,
 )
 bpy.types.Scene.rmtc_remove_material = bpy.props.StringProperty(
     name="Remove Material",
@@ -582,6 +520,7 @@ class ROOManticPanel(bpy.types.Panel):
         # base
         col = layout.column(align=True)
         col.label(icon="WORLD", text="Map Settings")
+        col.prop(scene, "rmtc_flip_normals")
         col.prop(scene, "rmtc_precision")
         col.prop_search(scene, "rmtc_remove_material", bpy.data, "materials")
         col = layout.column(align=True)
@@ -675,85 +614,61 @@ class ROOManticBuild(bpy.types.Operator):
         shapes = get_shapes(
             [context.scene.collection, levelCollection, shapeCollection])
 
-        # optimizations
+        # optimization
         hasBrushes = False
 
-        # loop on shapes
+        # unlink shapes from old collection
         for shape in shapes:
-            # unlink shapes from old collection
             for col in shape.users_collection:
                 col.objects.unlink(shape)
+            if shape.rmtc_shape_type == 'BRUSH':
+                hasBrushes = True
 
-            # if has no geom then remove
+        # if has no geom then remove
+        for shape in shapes:
             if len(shape.data.vertices) < 3:
                 shapes.remove(shape)
                 continue
 
-            # mark hasbrushes for
-            if shape.rmtc_shape_type == 'BRUSH':
-                hasBrushes = True
-
-            # update + link shapes
+        # update + link shapes
+        for shape in shapes:
             update_shape(shape)
             shapeCollection.objects.link(shape)
 
-        # cache data: shape-boolean + brush-boolean + bounds (they are just remove_material blobs)
-        shapeIntersections = {}
-        shapeBounds = {}
+        # cache shape boolean objects (they are just remove_material blobs)
         shapeBooleans = {}
         brushBoolean = create_mesh_obj('brushBoolean') if hasBrushes else None
-        if hasBrushes:
-            context.scene.collection.objects.link(brushBoolean)
-
+        context.scene.collection.objects.link(brushBoolean)
         for shape in shapes:
-            # init intersections
-            shapeIntersections[shape] = []
-
-            # bounds 
-            shapeBounds[shape] = calculate_bounds_ws(shape, 0.1)
-
-            # shapeBool
             shapeBoolean = eval_shape(shape)
             make_shape_boolean(shapeBoolean)
             shapeBooleans[shape] = shapeBoolean
-
-            # brushBool
             if hasBrushes:
                 if shape.rmtc_shape_type != 'BRUSH':
                     apply_csg(brushBoolean, shapeBoolean, 'UNION')
-        
-        # shape intersect map
-        for shape0 in shapes:
-            for shape1 in shapes:
-                if shape0 == shape1:
-                    continue
-                if shapeBounds[shape0].intersect(shapeBounds[shape1]):
-                    if shape1 not in shapeIntersections[shape0]:
-                        shapeIntersections[shape0].append(shape1)
-                    if shape0 not in shapeIntersections[shape1]:
-                        shapeIntersections[shape1].append(shape0)
 
         # create/duplicate shapes to output
-        for shape0 in shapes:
-            # eval shape
-            evaluatedShape = eval_shape(shape0)
+        for currentShape in shapes:
+            evaluatedShape = eval_shape(currentShape)
             evaluatedShape.display_type = 'TEXTURED'
-            copy_materials(shape0, evaluatedShape)
-
-            # add remove_material
+            copy_materials(currentShape, evaluatedShape)
             removeMaterialIndex = len(evaluatedShape.data.materials)
             set_material_slots_size(evaluatedShape, len(
                 evaluatedShape.data.materials) + 1)
             evaluatedShape.data.materials[removeMaterialIndex] = bpy.data.materials[context.scene.rmtc_remove_material]
-
-            # link
             levelCollection.objects.link(evaluatedShape)
 
-            # apply csg
-            if shape0.rmtc_shape_type == 'SECTOR2D' or shape0.rmtc_shape_type == 'SECTOR3D':
-                for shape1 in shapeIntersections[shape0]:
-                    apply_csg(evaluatedShape, shapeBooleans[shape1], 'UNION')
-                    flip_normals(evaluatedShape)
+            if currentShape.rmtc_shape_type == 'SECTOR2D' or currentShape.rmtc_shape_type == 'SECTOR3D':
+                for otherShape in shapes:
+                    if currentShape == otherShape:
+                        continue
+                    # if not in_bounds(currentShape,otherShape):
+                        # continue
+                    otherBoolean = shapeBooleans[otherShape]
+                    apply_csg(evaluatedShape, otherBoolean, 'UNION')
+
+                    if context.scene.rmtc_flip_normals:
+                        flip_normals(evaluatedShape)
             else:
                 apply_csg(evaluatedShape, brushBoolean, 'INTERSECT')
 
@@ -761,7 +676,7 @@ class ROOManticBuild(bpy.types.Operator):
 
             apply_triangulate(evaluatedShape)
 
-            if shape0.rmtc_shape_type == 'SECTOR2D' or shape0.rmtc_shape_auto_texture:
+            if currentShape.rmtc_shape_type == 'SECTOR2D' or currentShape.rmtc_shape_auto_texture:
                 apply_auto_texture(evaluatedShape)
 
         # mark unselectable
