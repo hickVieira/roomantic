@@ -699,8 +699,8 @@ class ROOManticBuild(bpy.types.Operator):
 
         # cache data: shape-boolean + brush-boolean + bounds (they are just remove_material blobs)
         shapeIntersections = {}
-        shapeBounds = {}
         shapeBooleans = {}
+        shapeBounds = {}
         brushBoolean = create_mesh_obj('brushBoolean') if hasBrushes else None
         if hasBrushes:
             context.scene.collection.objects.link(brushBoolean)
@@ -709,13 +709,13 @@ class ROOManticBuild(bpy.types.Operator):
             # init intersections
             shapeIntersections[shape] = []
 
-            # bounds 
-            shapeBounds[shape] = calculate_bounds_ws(shape, 0.1)
-
             # shapeBool
             shapeBoolean = eval_shape(shape)
             make_shape_boolean(shapeBoolean)
             shapeBooleans[shape] = shapeBoolean
+
+            # bounds 
+            shapeBounds[shape] = calculate_bounds_ws(shapeBoolean, 0.1)
 
             # brushBool
             if hasBrushes:
