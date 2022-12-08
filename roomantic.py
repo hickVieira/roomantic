@@ -26,7 +26,7 @@ from copy import copy
 bl_info = {
     "name": "ROOMantic",
     "author": "HickVieira",
-    "version": (1, 0),
+    "version": (1, 1),
     "blender": (3, 3, 0),
     "location": "View3D > Tools > ROOMantic",
     "description": "Toolbox for doom-style sector-based game level creation",
@@ -92,19 +92,12 @@ class Bounds:
             self.max.z >= other.min.z)
 
 
-def calculate_bounds_ws(obj, expand):
-    mat = obj.matrix_world
+def calculate_bounds_ws(mat, mesh, expand):
     bounds = Bounds()
-    for v in obj.data.vertices:
+    for v in mesh.vertices:
         pointWS = mat @ v.co
         bounds.encapsulate(Point(pointWS.x, pointWS.y, pointWS.z))
     bounds.expand(expand)
-    # print("obj " + obj.name)
-    # print("bound min " + str(bounds.min.x) + ' ' +
-    #       str(bounds.min.y) + ' ' + str(bounds.min.z) + ' ')
-    # print("bound max " + str(bounds.max.x) + ' ' +
-    #       str(bounds.max.y) + ' ' + str(bounds.max.z) + ' ')
-    # print("----------------------------")
     return bounds
 
 
@@ -129,6 +122,7 @@ def initialize_shape(shape):
 
         shape.rmtc_ceiling_height = 4
         shape.rmtc_floor_height = 0
+        shape.rmtc_split_faces = False
         shape.rmtc_shape_auto_texture = True
         shape.rmtc_floor_texture = ''
         shape.rmtc_wall_texture = ''
@@ -186,9 +180,9 @@ def remove_not_used():
     for mesh in bpy.data.meshes:
         if mesh.users == 0:
             bpy.data.meshes.remove(mesh, do_unlink=True)
-    for material in bpy.data.materials:
-        if material.users == 0:
-            bpy.data.materials.remove(material, do_unlink=True)
+    # for material in bpy.data.materials:
+    #     if material.users == 0:
+    #         bpy.data.materials.remove(material, do_unlink=True)
 
 
 def update_sector2d(shape):
@@ -241,7 +235,7 @@ def get_shapes(collections):
     shapes = []
     for col in collections:
         for obj in col.all_objects:
-            if obj.rmtc_shape_type is not None:
+            if obj.rmtc_shape_type != None:
                 if obj.rmtc_shape_type != 'NONE':
                     if obj not in shapes:
                         shapes.append(obj)
@@ -314,7 +308,7 @@ def apply_remove_material(shape):
     bpy.context.view_layer.objects.active = shape
     shape.select_set(True)
 
-    if bpy.context.scene.rmtc_remove_material is not "":
+    if bpy.context.scene.rmtc_remove_material != "":
         i = 0
         remove = False
         for m in shape.material_slots:
@@ -461,6 +455,11 @@ def apply_triangulate(shape):
     mod = shape.modifiers.new(name='triangulate', type='TRIANGULATE')
     bpy.ops.object.modifier_apply(modifier='triangulate')
 
+def apply_split_faces(shape):
+    bpy.ops.object.select_all(action='DESELECT')
+    bpy.context.view_layer.objects.active = shape
+    shape.select_set(True)
+
 # FUNCS
 
 
@@ -486,6 +485,11 @@ bpy.types.Object.rmtc_shape_type = bpy.props.EnumProperty(
     ],
     name="Shape Type",
     default='NONE'
+)
+bpy.types.Object.rmtc_split_faces = bpy.props.BoolProperty(
+    name="Shape Split Faces",
+    default=False,
+    description='Splitting faces can be handy in some cases.'
 )
 bpy.types.Object.rmtc_ceiling_height = bpy.props.FloatProperty(
     name="Ceiling Height",
@@ -603,13 +607,14 @@ class ROOManticPanel(bpy.types.Panel):
             col.operator("scene.rmtc_new_geometry", text="New Sector3D",
                          icon="CUBE").shape_type = 'SECTOR3D'
             col.operator("scene.rmtc_new_geometry", text="New Brush",
-                         icon="CUBE").shape_type = 'BRUSH'
+                         icon="MESH_CUBE").shape_type = 'BRUSH'
 
         # object
-        if obj is not None:
+        if obj != None:
             col = layout.column(align=True)
             col.label(icon="MOD_ARRAY", text="Shape Properties")
             col.prop(obj, "rmtc_shape_type", text="Shape Type")
+            col.prop(obj, "rmtc_split_faces", text="Split Faces")
             col.prop(obj, "rmtc_shape_auto_texture", text="Auto Texture")
             if obj.rmtc_shape_auto_texture:
                 col = layout.row(align=True)
@@ -715,7 +720,7 @@ class ROOManticBuild(bpy.types.Operator):
             shapeBooleans[shape] = shapeBoolean
 
             # bounds 
-            shapeBounds[shape] = calculate_bounds_ws(shapeBoolean, 0.1)
+            shapeBounds[shape] = calculate_bounds_ws(shape.matrix_world, shapeBoolean.data, 0.1)
 
             # brushBool
             if hasBrushes:
@@ -727,9 +732,12 @@ class ROOManticBuild(bpy.types.Operator):
             for shape1 in shapes:
                 if shape0 == shape1:
                     continue
-                if shapeBounds[shape0].intersect(shapeBounds[shape1]):
-                    if shape1 not in shapeIntersections[shape0]:
-                        shapeIntersections[shape0].append(shape1)
+
+                if shape1 in shapeIntersections[shape0]:
+                    continue
+                elif shapeBounds[shape0].intersect(shapeBounds[shape1]):
+                    shapeIntersections[shape0].append(shape1)
+
                     if shape0 not in shapeIntersections[shape1]:
                         shapeIntersections[shape1].append(shape0)
 
