@@ -455,6 +455,7 @@ def apply_triangulate(shape):
     mod = shape.modifiers.new(name='triangulate', type='TRIANGULATE')
     bpy.ops.object.modifier_apply(modifier='triangulate')
 
+
 def apply_split_faces(shape):
     bpy.ops.object.select_all(action='DESELECT')
     bpy.context.view_layer.objects.active = shape
@@ -672,6 +673,8 @@ class ROOManticBuild(bpy.types.Operator):
         # clear output collections
         for obj in levelCollection.objects:
             levelCollection.objects.unlink(obj)
+            if obj.rmtc_shape_type != 'NONE':
+                context.scene.collection.objects.link(obj)
 
         # cleanup
         remove_not_used()
@@ -706,9 +709,10 @@ class ROOManticBuild(bpy.types.Operator):
         shapeIntersections = {}
         shapeBooleans = {}
         shapeBounds = {}
-        brushBoolean = create_mesh_obj('brushBoolean') if hasBrushes else None
+        sectorBoolean = create_mesh_obj(
+            'sectorBoolean') if hasBrushes else None
         if hasBrushes:
-            context.scene.collection.objects.link(brushBoolean)
+            context.scene.collection.objects.link(sectorBoolean)
 
         for shape in shapes:
             # init intersections
@@ -719,14 +723,15 @@ class ROOManticBuild(bpy.types.Operator):
             make_shape_boolean(shapeBoolean)
             shapeBooleans[shape] = shapeBoolean
 
-            # bounds 
-            shapeBounds[shape] = calculate_bounds_ws(shape.matrix_world, shapeBoolean.data, 0.1)
+            # bounds
+            shapeBounds[shape] = calculate_bounds_ws(
+                shape.matrix_world, shapeBoolean.data, 0.1)
 
             # brushBool
             if hasBrushes:
                 if shape.rmtc_shape_type != 'BRUSH':
-                    apply_csg(brushBoolean, shapeBoolean, 'UNION')
-        
+                    apply_csg(sectorBoolean, shapeBoolean, 'UNION')
+
         # shape intersect map
         for shape0 in shapes:
             for shape1 in shapes:
@@ -758,12 +763,17 @@ class ROOManticBuild(bpy.types.Operator):
             levelCollection.objects.link(evaluatedShape)
 
             # apply csg
-            if shape0.rmtc_shape_type == 'SECTOR2D' or shape0.rmtc_shape_type == 'SECTOR3D':
+            if shape0.rmtc_shape_type == 'BRUSH':
+                for shape1 in shapeIntersections[shape0]:
+                    if shape1.rmtc_shape_type == 'BRUSH':
+                        apply_csg(evaluatedShape,
+                                  shapeBooleans[shape1], 'UNION')
+                    else:
+                        apply_csg(evaluatedShape, sectorBoolean, 'INTERSECT')
+            else:
                 for shape1 in shapeIntersections[shape0]:
                     apply_csg(evaluatedShape, shapeBooleans[shape1], 'UNION')
                     flip_normals(evaluatedShape)
-            else:
-                apply_csg(evaluatedShape, brushBoolean, 'INTERSECT')
 
             apply_remove_material(evaluatedShape)
 
@@ -780,9 +790,9 @@ class ROOManticBuild(bpy.types.Operator):
         if wasEditMode:
             bpy.ops.object.mode_set(mode='EDIT')
 
-        # unlink brushBoolean
+        # unlink sectorBoolean
         if hasBrushes:
-            context.scene.collection.objects.unlink(brushBoolean)
+            context.scene.collection.objects.unlink(sectorBoolean)
 
         # cleanup
         remove_not_used()
