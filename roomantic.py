@@ -26,7 +26,7 @@ from copy import copy
 bl_info = {
     "name": "ROOMantic",
     "author": "hickv",
-    "version": (1, 2),
+    "version": (1, 3),
     "blender": (3, 3, 0),
     "location": "View3D > Tools > ROOMantic",
     "description": "Toolbox for doom-style sector-based game level creation",
@@ -148,6 +148,16 @@ def get_add_collection(scene, name):
     return col
 
 
+def unlink_collections_all(obj):
+    for col in obj.users_collection:
+        col.objects.unlink(obj)
+
+
+def link_collection_unique(obj, collection):
+    unlink_collections_all(obj)
+    collection.objects.link(obj)
+
+
 def get_modifier(obj, type):
     for mod in obj.modifiers:
         if mod.type == type:
@@ -263,16 +273,21 @@ def create_remove_material():
     return newMat
 
 
-def eval_shape(shape):
+def eval_shape(shape, namePrefix):
     dg = bpy.context.evaluated_depsgraph_get()
     evalObj = shape.evaluated_get(dg)
+
     mesh = bpy.data.meshes.new_from_object(evalObj)
     mesh.use_auto_smooth = shape.data.use_auto_smooth
     mesh.auto_smooth_angle = shape.data.auto_smooth_angle
 
-    roomName = "rmtc_" + shape.name
-    room = bpy.data.objects.new(roomName, mesh)
-    room.name = roomName
+    roomName = namePrefix + shape.name
+    room = None
+    if roomName in bpy.data.objects:
+        room = bpy.data.objects[roomName]
+        room.data = mesh
+    else:
+        room = bpy.data.objects.new(roomName, mesh)
 
     copy_transforms(shape, room)
     update_shape_precision(room)
@@ -590,8 +605,10 @@ class ROOManticPanel(bpy.types.Panel):
         col.prop(scene, "rmtc_precision")
         col.prop_search(scene, "rmtc_remove_material", bpy.data, "materials")
         col = layout.column(align=True)
-        col.operator("scene.rmtc_build", text="Build All", icon="MOD_BUILD").selected_only = False
-        col.operator("scene.rmtc_build", text="Build Selected", icon="MOD_BUILD").selected_only = True
+        col.operator("scene.rmtc_build", text="Build All",
+                     icon="MOD_BUILD").selected_only = False
+        col.operator("scene.rmtc_build", text="Build Selected",
+                     icon="MOD_BUILD").selected_only = True
 
         # tools
         col = layout.column(align=True)
@@ -669,24 +686,36 @@ class ROOManticBuild(bpy.types.Operator):
         # So we can no longer rely on a global level_geometry object that gets booleaned around by each shape
         # we now need to treat each shape separately
 
+        # cleanup
+        remove_not_used()
+
          # make sure remove_materials is present
         if context.scene.rmtc_remove_material == '' or context.scene.rmtc_remove_material is None or context.scene.rmtc_remove_material not in bpy.data.materials:
             context.scene.rmtc_remove_material = create_remove_material().name
 
-        # get output collection
+        # get collection
         levelCollection = get_add_collection(context.scene, 'ROOMantic_LEVEL')
         levelCollection.hide_select = False
         shapeCollection = get_add_collection(context.scene, 'ROOMantic_SHAPES')
         shapeCollection.hide_select = False
 
-        # clear output collections
+        # clear collections
         for obj in levelCollection.objects:
-            levelCollection.objects.unlink(obj)
+            # unlink only if selected
+            if self.selected_only:
+                fullName = obj.name.split('rmtc_')
+                if len(fullName) == 2:
+                    shapeName = fullName[1]
+                    for sel in selectedObjs:
+                        if sel.name == shapeName:
+                            unlink_collections_all(obj)
+                            continue
+            else:
+                unlink_collections_all(obj)
+            
+            # if brush inside this collection, then link it to scene
             if obj.rmtc_shape_type != 'NONE':
-                context.scene.collection.objects.link(obj)
-
-        # cleanup
-        remove_not_used()
+                link_collection_unique(obj, context.scene.collection)
 
         # look for shapes
         shapes = get_shapes(
@@ -697,10 +726,6 @@ class ROOManticBuild(bpy.types.Operator):
 
         # loop on shapes
         for shape in shapes:
-            # unlink shapes from old collection
-            for col in shape.users_collection:
-                col.objects.unlink(shape)
-
             # if has no geom then remove
             if len(shape.data.vertices) < 3:
                 shapes.remove(shape)
@@ -712,7 +737,7 @@ class ROOManticBuild(bpy.types.Operator):
 
             # update + link shapes
             update_shape(shape)
-            shapeCollection.objects.link(shape)
+            link_collection_unique(shape, shapeCollection)
 
         # cache data: shape-boolean + brush-boolean + bounds (they are just remove_material blobs)
         shapeIntersections = {}
@@ -721,14 +746,14 @@ class ROOManticBuild(bpy.types.Operator):
         sectorBoolean = create_mesh_obj(
             'sectorBoolean') if hasBrushes else None
         if hasBrushes:
-            context.scene.collection.objects.link(sectorBoolean)
+            link_collection_unique(sectorBoolean, context.scene.collection)
 
         for shape in shapes:
             # init intersections
             shapeIntersections[shape] = []
 
             # shapeBool
-            shapeBoolean = eval_shape(shape)
+            shapeBoolean = eval_shape(shape, 'boolean_')
             make_shape_boolean(shapeBoolean)
             shapeBooleans[shape] = shapeBoolean
 
@@ -762,7 +787,7 @@ class ROOManticBuild(bpy.types.Operator):
             if self.selected_only and shape0 not in selectedObjs:
                 continue
             # eval shape
-            evaluatedShape = eval_shape(shape0)
+            evaluatedShape = eval_shape(shape0, 'rmtc_')
             evaluatedShape.display_type = 'TEXTURED'
             copy_materials(shape0, evaluatedShape)
 
@@ -773,7 +798,7 @@ class ROOManticBuild(bpy.types.Operator):
             evaluatedShape.data.materials[removeMaterialIndex] = bpy.data.materials[context.scene.rmtc_remove_material]
 
             # link
-            levelCollection.objects.link(evaluatedShape)
+            link_collection_unique(evaluatedShape, levelCollection)
 
             # apply csg
             if shape0.rmtc_shape_type == 'BRUSH':
@@ -801,17 +826,17 @@ class ROOManticBuild(bpy.types.Operator):
         # restore context
         bpy.ops.object.select_all(action='DESELECT')
         if activeObj != None:
-            activeObj.select_set(True)
             bpy.context.view_layer.objects.active = activeObj
+            activeObj.select_set(True)
         for obj in selectedObjs:
             if obj != None:
                 obj.select_set(True)
         if wasEditMode:
             bpy.ops.object.mode_set(mode='EDIT')
-        
+
         # unlink sectorBoolean
         if hasBrushes:
-            context.scene.collection.objects.unlink(sectorBoolean)
+            unlink_collections_all(sectorBoolean)
 
         return {"FINISHED"}
 
