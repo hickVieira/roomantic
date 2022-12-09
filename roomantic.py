@@ -25,8 +25,8 @@ from copy import copy
 
 bl_info = {
     "name": "ROOMantic",
-    "author": "HickVieira",
-    "version": (1, 1),
+    "author": "hickv",
+    "version": (1, 2),
     "blender": (3, 3, 0),
     "location": "View3D > Tools > ROOMantic",
     "description": "Toolbox for doom-style sector-based game level creation",
@@ -354,8 +354,8 @@ def rotate2D(uv, degrees):
     return newUV
 
 
-def apply_auto_texture(shape):
-    mesh = shape.data
+def apply_auto_texture(shape, eval):
+    mesh = eval.data
     objectLocation = shape.location
     objectScale = shape.scale
 
@@ -429,22 +429,22 @@ def apply_auto_texture(shape):
                 luv.uv.y = ((l.vert.co.y * objectScale[1]) + objectLocation[1])
                 luv.uv = rotate2D(luv.uv, shape.rmtc_ceiling_texture_rotation)
                 luv.uv.x = translate(scale(
-                    luv.uv.x, shape.rmtc_ceiling_texture_scale_offset[0]), shape.rmtc_ceiling_texture_scale_offset[2])
+                    luv.uv.x, shape.rmtc_floor_texture_scale_offset[0]), shape.rmtc_floor_texture_scale_offset[2])
                 luv.uv.y = translate(scale(
-                    luv.uv.y, shape.rmtc_ceiling_texture_scale_offset[1]), shape.rmtc_ceiling_texture_scale_offset[3])
+                    luv.uv.y, shape.rmtc_floor_texture_scale_offset[1]), shape.rmtc_floor_texture_scale_offset[3])
             if faceDirection == "-z":
                 luv.uv.x = ((l.vert.co.x * objectScale[0]) + objectLocation[0])
                 luv.uv.y = ((l.vert.co.y * objectScale[1]) + objectLocation[1])
                 luv.uv = rotate2D(luv.uv, shape.rmtc_floor_texture_rotation)
                 luv.uv.x = translate(scale(
-                    luv.uv.x, shape.rmtc_floor_texture_scale_offset[0]), shape.rmtc_floor_texture_scale_offset[2])
+                    luv.uv.x, shape.rmtc_ceiling_texture_scale_offset[0]), shape.rmtc_ceiling_texture_scale_offset[2])
                 luv.uv.y = translate(scale(
-                    luv.uv.y, shape.rmtc_floor_texture_scale_offset[1]), shape.rmtc_floor_texture_scale_offset[3])
+                    luv.uv.y, shape.rmtc_ceiling_texture_scale_offset[1]), shape.rmtc_ceiling_texture_scale_offset[3])
 
     bm.to_mesh(mesh)
     bm.free()
 
-    shape.data = mesh
+    eval.data = mesh
 
 
 def apply_triangulate(shape):
@@ -590,7 +590,8 @@ class ROOManticPanel(bpy.types.Panel):
         col.prop(scene, "rmtc_precision")
         col.prop_search(scene, "rmtc_remove_material", bpy.data, "materials")
         col = layout.column(align=True)
-        col.operator("scene.rmtc_build", text="Build", icon="MOD_BUILD")
+        col.operator("scene.rmtc_build", text="Build All", icon="MOD_BUILD").selected_only = False
+        col.operator("scene.rmtc_build", text="Build Selected", icon="MOD_BUILD").selected_only = True
 
         # tools
         col = layout.column(align=True)
@@ -649,7 +650,15 @@ class ROOManticBuild(bpy.types.Operator):
     bl_idname = "scene.rmtc_build"
     bl_label = "Build"
 
+    selected_only: bpy.props.BoolProperty(name="selected_only", default=False)
+
     def execute(self, context):
+        # cache selected
+        activeObj = context.active_object
+        selectedObjs = []
+        for obj in context.selected_objects:
+            selectedObjs.append(obj)
+
         # save context
         wasEditMode = False
         if context.mode == 'EDIT_MESH':
@@ -734,6 +743,8 @@ class ROOManticBuild(bpy.types.Operator):
 
         # shape intersect map
         for shape0 in shapes:
+            if self.selected_only and shape0 not in selectedObjs:
+                continue
             for shape1 in shapes:
                 if shape0 == shape1:
                     continue
@@ -748,6 +759,8 @@ class ROOManticBuild(bpy.types.Operator):
 
         # create/duplicate shapes to output
         for shape0 in shapes:
+            if self.selected_only and shape0 not in selectedObjs:
+                continue
             # eval shape
             evaluatedShape = eval_shape(shape0)
             evaluatedShape.display_type = 'TEXTURED'
@@ -773,29 +786,32 @@ class ROOManticBuild(bpy.types.Operator):
             else:
                 for shape1 in shapeIntersections[shape0]:
                     apply_csg(evaluatedShape, shapeBooleans[shape1], 'UNION')
-                    flip_normals(evaluatedShape)
+                flip_normals(evaluatedShape)
 
             apply_remove_material(evaluatedShape)
 
             apply_triangulate(evaluatedShape)
 
             if shape0.rmtc_shape_type == 'SECTOR2D' or shape0.rmtc_shape_auto_texture:
-                apply_auto_texture(evaluatedShape)
+                apply_auto_texture(shape0, evaluatedShape)
 
         # mark unselectable
         levelCollection.hide_select = True
 
         # restore context
         bpy.ops.object.select_all(action='DESELECT')
+        if activeObj != None:
+            activeObj.select_set(True)
+            bpy.context.view_layer.objects.active = activeObj
+        for obj in selectedObjs:
+            if obj != None:
+                obj.select_set(True)
         if wasEditMode:
             bpy.ops.object.mode_set(mode='EDIT')
-
+        
         # unlink sectorBoolean
         if hasBrushes:
             context.scene.collection.objects.unlink(sectorBoolean)
-
-        # cleanup
-        remove_not_used()
 
         return {"FINISHED"}
 
@@ -852,6 +868,7 @@ class ROOManticOpenMaterial(bpy.types.Operator, ImportHelper):
 
             if newMaterial == None:
                 newMaterial = bpy.data.materials.new(newMaterialName)
+                newMaterial.use_fake_user = True
 
             newMaterial.use_nodes = True
             newMaterial.preview_render_type = 'FLAT'
