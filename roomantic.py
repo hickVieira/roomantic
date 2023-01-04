@@ -892,6 +892,10 @@ class ROOManticBuild(bpy.types.Operator):
         end = time.time()
         print("test calculate_bounds_ws - {:.2g} sec.".format(end - start))
 
+        for shape in shapes:
+            print("shape[" + shape.name + "] intersection count = " +
+                  str(len(shapeIntersections[shape])))
+
         return {"FINISHED"}
 
 
