@@ -21,7 +21,6 @@ import bpy
 import math
 import os
 from copy import copy
-import time
 
 
 bl_info = {
@@ -123,6 +122,7 @@ def initialize_shape(shape):
 
         shape.rmtc_ceiling_height = 4
         shape.rmtc_floor_height = 0
+        shape.rmtc_split_faces = False
         shape.rmtc_shape_auto_texture = True
         shape.rmtc_floor_texture = ''
         shape.rmtc_wall_texture = ''
@@ -504,6 +504,11 @@ bpy.types.Object.rmtc_shape_type = bpy.props.EnumProperty(
     name="Shape Type",
     default='NONE'
 )
+bpy.types.Object.rmtc_split_faces = bpy.props.BoolProperty(
+    name="Shape Split Faces",
+    default=False,
+    description='Splitting faces can be handy in some cases.'
+)
 bpy.types.Object.rmtc_ceiling_height = bpy.props.FloatProperty(
     name="Ceiling Height",
     default=4,
@@ -630,6 +635,7 @@ class ROOManticPanel(bpy.types.Panel):
             col = layout.column(align=True)
             col.label(icon="MOD_ARRAY", text="Shape Properties")
             col.prop(obj, "rmtc_shape_type", text="Shape Type")
+            col.prop(obj, "rmtc_split_faces", text="Split Faces")
             col.prop(obj, "rmtc_shape_auto_texture", text="Auto Texture")
             if obj.rmtc_shape_auto_texture:
                 col = layout.row(align=True)
@@ -682,13 +688,10 @@ class ROOManticBuild(bpy.types.Operator):
         # So we can no longer rely on a global level_geometry object that gets booleaned around by each shape
         # we now need to treat each shape separately
 
-        print("\n roomantic build start \n")
-
-        start = time.time()
         # cleanup
         remove_not_used()
 
-        # make sure remove_materials is present
+         # make sure remove_materials is present
         if context.scene.rmtc_remove_material == '' or context.scene.rmtc_remove_material is None or context.scene.rmtc_remove_material not in bpy.data.materials:
             context.scene.rmtc_remove_material = create_remove_material().name
 
@@ -711,15 +714,10 @@ class ROOManticBuild(bpy.types.Operator):
                             continue
             else:
                 unlink_collections_all(obj)
-
+            
             # if brush inside this collection, then link it to scene
             if obj.rmtc_shape_type != 'NONE':
                 link_collection_unique(obj, context.scene.collection)
-
-        end = time.time()
-        print("clearing collections - {:.2g} sec.".format(end - start))
-
-        start = time.time()
 
         # look for shapes
         shapes = get_shapes(
@@ -743,11 +741,6 @@ class ROOManticBuild(bpy.types.Operator):
             update_shape(shape)
             link_collection_unique(shape, shapeCollection)
 
-        end = time.time()
-        print("setting up shapes - {:.2g} sec.".format(end - start))
-
-        start = time.time()
-
         # cache data: shape-boolean + brush-boolean + bounds (they are just remove_material blobs)
         shapeIntersections = {}
         shapeBooleans = {}
@@ -758,9 +751,6 @@ class ROOManticBuild(bpy.types.Operator):
             link_collection_unique(sectorBoolean, context.scene.collection)
 
         for shape in shapes:
-            if self.selected_only and shape not in selectedObjs:
-                continue
-
             # init intersections
             shapeIntersections[shape] = []
 
@@ -778,42 +768,21 @@ class ROOManticBuild(bpy.types.Operator):
                 if shape.rmtc_shape_type != 'BRUSH':
                     apply_csg(sectorBoolean, shapeBoolean, 'UNION')
 
-        end = time.time()
-        print("caching shape data - {:.2g} sec.".format(end - start))
-
-        start = time.time()
-
         # shape intersect map
         for shape0 in shapes:
             if self.selected_only and shape0 not in selectedObjs:
                 continue
-
-            # loop for each other shape
             for shape1 in shapes:
                 if shape0 == shape1:
                     continue
 
-                # if shape is already intersecting then just ignore
                 if shape1 in shapeIntersections[shape0]:
                     continue
-
-                # check if valid
-                if shape0 not in shapeBounds or shape1 not in shapeBounds:
-                    continue
-
-                # check intersection and add both ways
-                if shapeBounds[shape0].intersect(shapeBounds[shape1]):
-                    # add other to current
+                elif shapeBounds[shape0].intersect(shapeBounds[shape1]):
                     shapeIntersections[shape0].append(shape1)
-                    # add current to other
+
                     if shape0 not in shapeIntersections[shape1]:
                         shapeIntersections[shape1].append(shape0)
-
-        end = time.time()
-        print(
-            "creatin shape intersection tables - {:.2g} sec.".format(end - start))
-
-        start = time.time()
 
         # create/duplicate shapes to output
         for shape0 in shapes:
@@ -853,11 +822,6 @@ class ROOManticBuild(bpy.types.Operator):
             if shape0.rmtc_shape_type == 'SECTOR2D' or shape0.rmtc_shape_auto_texture:
                 apply_auto_texture(shape0, evaluatedShape)
 
-        end = time.time()
-        print("performing csg - {:.2g} sec.".format(end - start))
-
-        start = time.time()
-
         # mark unselectable
         levelCollection.hide_select = True
 
@@ -875,22 +839,6 @@ class ROOManticBuild(bpy.types.Operator):
         # unlink sectorBoolean
         if hasBrushes:
             unlink_collections_all(sectorBoolean)
-
-        end = time.time()
-        print("final cleanup - {:.2g} sec.".format(end - start))
-
-        start = time.time()
-        for shape in shapes:
-            shapeBoolean = eval_shape(shape, 'test')
-        end = time.time()
-        print("test eval_shape - {:.2g} sec.".format(end - start))
-
-        start = time.time()
-        for shape in shapes:
-            bounds = calculate_bounds_ws(
-                shape.matrix_world, shapeBoolean.data, 0.1)
-        end = time.time()
-        print("test calculate_bounds_ws - {:.2g} sec.".format(end - start))
 
         return {"FINISHED"}
 
