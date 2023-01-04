@@ -682,7 +682,7 @@ class ROOManticBuild(bpy.types.Operator):
         # So we can no longer rely on a global level_geometry object that gets booleaned around by each shape
         # we now need to treat each shape separately
 
-        print("\n roomantic build start \n")
+        print("\nroomantic: build start")
 
         start = time.time()
         # cleanup
@@ -717,7 +717,8 @@ class ROOManticBuild(bpy.types.Operator):
                 link_collection_unique(obj, context.scene.collection)
 
         end = time.time()
-        print("clearing collections - {:.2g} sec.".format(end - start))
+        print(
+            "roomantic: cleanup collections - {:.2g} sec.".format(end - start))
 
         start = time.time()
 
@@ -735,7 +736,7 @@ class ROOManticBuild(bpy.types.Operator):
                 shapes.remove(shape)
                 continue
 
-            # mark hasbrushes for
+            # mark hasbrushes flag
             if shape.rmtc_shape_type == 'BRUSH':
                 hasBrushes = True
 
@@ -744,7 +745,7 @@ class ROOManticBuild(bpy.types.Operator):
             link_collection_unique(shape, shapeCollection)
 
         end = time.time()
-        print("setting up shapes - {:.2g} sec.".format(end - start))
+        print("roomantic: setting up shapes - {:.2g} sec.".format(end - start))
 
         start = time.time()
 
@@ -779,7 +780,8 @@ class ROOManticBuild(bpy.types.Operator):
                     apply_csg(sectorBoolean, shapeBoolean, 'UNION')
 
         end = time.time()
-        print("caching shape data - {:.2g} sec.".format(end - start))
+        print(
+            "roomantic: caching shape data - {:.2g} sec.".format(end - start))
 
         start = time.time()
 
@@ -811,7 +813,7 @@ class ROOManticBuild(bpy.types.Operator):
 
         end = time.time()
         print(
-            "creatin shape intersection tables - {:.2g} sec.".format(end - start))
+            "roomantic: creatin shape intersection tables - {:.2g} sec.".format(end - start))
 
         start = time.time()
 
@@ -819,6 +821,7 @@ class ROOManticBuild(bpy.types.Operator):
         for shape0 in shapes:
             if self.selected_only and shape0 not in selectedObjs:
                 continue
+
             # eval shape
             evaluatedShape = eval_shape(shape0, 'rmtc_')
             evaluatedShape.display_type = 'TEXTURED'
@@ -854,7 +857,7 @@ class ROOManticBuild(bpy.types.Operator):
                 apply_auto_texture(shape0, evaluatedShape)
 
         end = time.time()
-        print("performing csg - {:.2g} sec.".format(end - start))
+        print("roomantic: performing csg - {:.2g} sec.".format(end - start))
 
         start = time.time()
 
@@ -877,24 +880,7 @@ class ROOManticBuild(bpy.types.Operator):
             unlink_collections_all(sectorBoolean)
 
         end = time.time()
-        print("final cleanup - {:.2g} sec.".format(end - start))
-
-        start = time.time()
-        for shape in shapes:
-            shapeBoolean = eval_shape(shape, 'test')
-        end = time.time()
-        print("test eval_shape - {:.2g} sec.".format(end - start))
-
-        start = time.time()
-        for shape in shapes:
-            bounds = calculate_bounds_ws(
-                shape.matrix_world, shapeBoolean.data, 0.1)
-        end = time.time()
-        print("test calculate_bounds_ws - {:.2g} sec.".format(end - start))
-
-        for shape in shapes:
-            print("shape[" + shape.name + "] intersection count = " +
-                  str(len(shapeIntersections[shape])))
+        print("roomantic: final cleanup - {:.2g} sec.".format(end - start))
 
         return {"FINISHED"}
 
