@@ -442,7 +442,7 @@ def apply_auto_texture(shape, eval):
             if faceDirection == "z":
                 luv.uv.x = ((l.vert.co.x * objectScale[0]) + objectLocation[0])
                 luv.uv.y = ((l.vert.co.y * objectScale[1]) + objectLocation[1])
-                luv.uv = rotate2D(luv.uv, shape.rmtc_ceiling_texture_rotation)
+                luv.uv = rotate2D(luv.uv, shape.rmtc_floor_texture_rotation)
                 luv.uv.x = translate(scale(
                     luv.uv.x, shape.rmtc_floor_texture_scale_offset[0]), shape.rmtc_floor_texture_scale_offset[2])
                 luv.uv.y = translate(scale(
@@ -450,7 +450,7 @@ def apply_auto_texture(shape, eval):
             if faceDirection == "-z":
                 luv.uv.x = ((l.vert.co.x * objectScale[0]) + objectLocation[0])
                 luv.uv.y = ((l.vert.co.y * objectScale[1]) + objectLocation[1])
-                luv.uv = rotate2D(luv.uv, shape.rmtc_floor_texture_rotation)
+                luv.uv = rotate2D(luv.uv, shape.rmtc_ceiling_texture_rotation)
                 luv.uv.x = translate(scale(
                     luv.uv.x, shape.rmtc_ceiling_texture_scale_offset[0]), shape.rmtc_ceiling_texture_scale_offset[2])
                 luv.uv.y = translate(scale(
