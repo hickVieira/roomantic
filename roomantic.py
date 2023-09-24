@@ -324,23 +324,16 @@ def apply_remove_material(shape):
     shape.select_set(True)
 
     if bpy.context.scene.rmtc_remove_material != "":
-        i = 0
         remove = False
-        for m in shape.material_slots:
+        for i, m in enumerate(shape.material_slots):
             if bpy.context.scene.rmtc_remove_material == m.name:
-                remove = True
-            else:
-                if not remove:
-                    i += 1
-
-        if remove:
-            shape.active_material_index = i
-            bpy.ops.object.editmode_toggle()
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.object.material_slot_select()
-            bpy.ops.mesh.delete(type='FACE')
-            bpy.ops.object.editmode_toggle()
-            bpy.ops.object.material_slot_remove()
+                shape.active_material_index = i
+                bpy.ops.object.editmode_toggle()
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.ops.object.material_slot_select()
+                bpy.ops.mesh.delete(type='FACE')
+                bpy.ops.object.editmode_toggle()
+                bpy.ops.object.material_slot_remove()
 
 
 def flip_normals(shape):
