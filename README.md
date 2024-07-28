@@ -1,3 +1,6 @@
+# Update 27 of July, 2024
+This addon has been superseded by the powerful and versatile geometry nodes tool.
+
 ROOMantic is a Blender addon that enables you to model game levels using a doom-style sector-based approach. It is particularly useful for its ability to split rooms into separate objects, which is necessary to allow occlusion culling and avoid 'overdraw' on most game engines.
 
 It is a re-written from scratch version of LevelBuddy.
